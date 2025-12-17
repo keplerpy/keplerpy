@@ -1,6 +1,7 @@
 import pygfx as gfx
 from rendercanvas.auto import RenderCanvas, loop
 import numpy as np
+from numpy.typing import NDArray
 
 
 # TODO: This function is very WIP. It currently needs the following:
@@ -65,7 +66,7 @@ class OrbitalCamera(gfx.PerspectiveCamera):
 class TempRenderEngine:
     def __init__(self):
         self.central_body = gfx.Mesh(
-            gfx.sphere_geometry(radius=1, width_segments=64, height_segments=32),
+            gfx.sphere_geometry(radius=6371, width_segments=64, height_segments=32),
             gfx.MeshPhongMaterial(color="#0F52BA")
         )
         self.canvas = RenderCanvas(size=(200, 200), title="TBD")
@@ -78,10 +79,10 @@ class TempRenderEngine:
         self.camera = OrbitalCamera(
             fov=50,
             aspect=16/9,
-            radius=2,
-            zoom_rate=0.1,
-            azimuth_rate=np.pi/12,
-            elevation_rate=np.pi/12
+            radius=10000,
+            zoom_rate=1000,
+            azimuth_rate=np.pi/24,
+            elevation_rate=np.pi/36
         )
         gfx.OrbitController(self.camera, register_events=self.renderer)
 
@@ -116,3 +117,10 @@ class TempRenderEngine:
             self.camera.elevation_vel = 0
             self.camera.azimuth_vel = 0
             self.camera.zoom_vel = 0
+
+    def draw_orbit(self, traj: NDArray[float]):
+        traj = traj.T / 1000
+        traj = traj.astype(np.float32)
+        self.scene.add(
+            gfx.Line(gfx.Geometry(positions=traj), gfx.LineMaterial(thickness=2, color=gfx.Color("#FF073A")))
+        )

@@ -1,4 +1,6 @@
-import propagation
+from . import propagation
+from ui import rendering
+
 
 class Mission:
     def __init__(
@@ -28,13 +30,16 @@ class Mission:
     def simulate(self):
         match self.propagator:
             case "Keplerian":
-                self.traj = propagation.Keplerian(
+                solver = propagation.Keplerian(
                     self.starting_orbit,
-                    initial_time=0,
                     final_time=self.final_global_time - self.initial_global_time,
                     step_size=self.step_size,
                     tol=self.tol,
                 )
+                solver.propagate()
+                self.traj = solver.position_history
 
     def display(self):
-        pass
+        engine = rendering.TempRenderEngine()
+        engine.draw_orbit(self.traj)
+        engine.render()
