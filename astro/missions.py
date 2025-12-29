@@ -2,6 +2,7 @@ from . import propagation
 from ui import rendering
 
 
+# TODO: Add **kwargs to allow switching between different solvers.
 class Mission:
     def __init__(
             self,
@@ -30,7 +31,7 @@ class Mission:
     def simulate(self):
         match self.propagator:
             case "Keplerian":
-                solver = propagation.Keplerian(
+                solver = propagation.kepler.Keplerian(
                     self.starting_orbit,
                     final_time=self.final_global_time - self.initial_global_time,
                     step_size=self.step_size,
