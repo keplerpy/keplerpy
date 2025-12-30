@@ -79,7 +79,7 @@ class TempRenderEngine:
         self.camera = OrbitalCamera(
             fov=50,
             aspect=16/9,
-            radius=10000,
+            radius=20000,
             zoom_rate=1000,
             azimuth_rate=np.pi/24,
             elevation_rate=np.pi/36

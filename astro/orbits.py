@@ -34,8 +34,8 @@ class Orbit:
 
     def __init__(
             self,
-            position: NDArray[np.floating],
-            velocity: NDArray[np.floating],
+            position: NDArray[float],
+            velocity: NDArray[float],
             time: float,
             grav_param: float=3.986004418e14  # Default to Earth in units of m^3/s^2.
     ):
@@ -53,8 +53,8 @@ class Orbit:
     @classmethod
     def from_state(
             cls,
-            position,
-            velocity,
+            position: NDArray[float],
+            velocity: NDArray[float],
             time,
             grav_param=3.986004418e14  # Default to Earth in units of m^3/s^2.
     ) -> "Orbit":
@@ -74,7 +74,7 @@ class Orbit:
             argp: float,
             true_anomaly: float,
             time: float,
-            grav_param: float =3.986004418e14  # Default to Earth in units of m^3/s^2.
+            grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
     ) -> "Orbit":
         """
         Alternative constructor which takes in the orbital elements and calls elements_2_state() to convert to position
@@ -91,6 +91,52 @@ class Orbit:
             grav_param=grav_param
         )
         return cls(position, velocity, time, grav_param)
+
+    @classmethod
+    def from_gibbs(
+            cls,
+            position1: NDArray[float],
+            position2: NDArray[float],
+            position3: NDArray[float],
+            time: float,
+            grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
+    ):
+        """
+        Alternative constructor which returns the position and velocity given three co-planar position vectors. The
+        process of determining the conic whose origin lies at the center of three co-planar vectors is known as Gibbs'
+        method.
+            The three position vectors passed in should be (3, ) numpy arrays.
+
+        NOTE: position1 should reflect the current position of the satellite.
+        """
+
+        # Form the three vectors used in Gibbs' method. The first two correspond to parameter = vec1 / vec2, and the
+        # third comes from eccentricity = vec3 / vec2 in the derivation.
+        gibbs_vec1 = (
+                np.linalg.norm(position3) * np.cross(position1, position2)
+                    + np.linalg.norm(position1) * np.cross(position2, position3)
+                    + np.linalg.norm(position2) * np.cross(position3, position1)
+        )
+        gibbs_vec2 = np.cross(position1, position2) + np.cross(position2, position3) + np.cross(position3, position1)
+        gibbs_vec3 = (
+                (np.linalg.norm(position2) - np.linalg.norm(position3)) * position1
+                    + (np.linalg.norm(position3) - np.linalg.norm(position1)) * position2
+                    + (np.linalg.norm(position1) - np.linalg.norm(position2)) * position3
+        )
+
+        # Compute the velocity corresponding to position1.
+        velocity = (
+                1 / np.linalg.norm(position1)
+                    * np.sqrt(grav_param / (np.linalg.norm(gibbs_vec1) * np.linalg.norm(gibbs_vec2)))
+                    * np.cross(gibbs_vec2, position1)
+                    + np.sqrt(grav_param / (np.linalg.norm(gibbs_vec1) * np.linalg.norm(gibbs_vec2))) * gibbs_vec3
+        )
+
+        return cls(position1, velocity, time, grav_param)
+
+    @classmethod
+    def from_lambert(cls):
+        pass
 
     # -------------------------------
     # ORBITAL ELEMENT UPDATES METHODS
