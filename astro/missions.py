@@ -1,5 +1,7 @@
 from . import propagation, orbits
 from ui import rendering
+import numpy as np
+import pandas as pd
 
 
 class Mission:
@@ -57,3 +59,26 @@ class Mission:
         engine = rendering.TempRenderEngine()
         engine.draw_orbit(self.traj)
         engine.render()
+
+    def to_csv(self, file_path, fp_accuracy=6):
+        """
+        Save the resulting trajectory to a .csv file.
+
+        :param file_path: Name and destination of resultant .csv file.
+        :param fp_accuracy: How many sig figs past the decimal data should be logged to.
+        """
+
+        positions_to_log = self.propagator.position_history.copy()
+        velocities_to_log = self.propagator.velocity_history.copy()
+
+        positions_to_log = positions_to_log.T
+        velocities_to_log = velocities_to_log.T
+
+        labels = ['x-position', 'y-position', 'z-position', 'x-velocity', 'y-velocity', 'z-velocity']
+        data_arr = np.hstack((positions_to_log, velocities_to_log))
+        data_df = pd.DataFrame(data_arr, columns=labels)
+        data_df.to_csv(
+            f"{file_path}.csv",
+            index=False,
+            float_format=f"%.{fp_accuracy}f"
+        )
