@@ -219,10 +219,10 @@ class Orbit:
                 / np.sqrt(1 - np.cos(true_anomaly))
         )
 
-        # The UniversalVariable class contains a method called stumpff_funcs() which given a value of the Stumpff
+        # The UniversalVariablePropagator class contains a method called stumpff_funcs() which given a value of the Stumpff
         # parameter evaluates the Stumpff series. We need this function so we're going to perform a pseudo-instantiation
         # of this class to get access to it, only passing in attributes relevant to calling stumpff_funcs().
-        uv_propagator = propagation.universal_variable.UniversalVariable(
+        uv_propagator = propagation.universal_variable.UniversalVariablePropagator(
             stumpff_tol=stumpff_tol,
             stumpff_series_length=stumpff_series_length,
         )

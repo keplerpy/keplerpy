@@ -2,10 +2,11 @@ from . import base
 import numpy as np
 from numpy.typing import NDArray
 import scipy as sp
+from . import logging
 
 
 # TODO: Store universal variable results.
-class UniversalVariable(base.Propagator):
+class UniversalVariablePropagator(base.Propagator):
     """
     Propagator which uses the universal variable formulation of Kepler's equation along with f and g series. This makes
     use of the titular "universal variable" along with special functions known as Stumpff series to handle propagation
@@ -23,10 +24,15 @@ class UniversalVariable(base.Propagator):
         definition of the Stumpff series.
     :ivar stumpff_series_length: How many terms to evaluate in the Stumpff series when using their infinite series
         definitions.
+
+    [PROPAGATION METHOD PARAMETERS]
+    :ivar universal_variable:
+    :ivar stumpff_param:
     """
 
     def __init__(
             self,
+            loggers: list[logging.Logger] = None,
             step_size=None,
             solver_tol=1e-8,
             stumpff_tol=1e-8,
@@ -38,9 +44,14 @@ class UniversalVariable(base.Propagator):
         self.stumpff_tol = stumpff_tol
         self.stumpff_series_length = stumpff_series_length
 
-        self.inverse_sm_axis = ...
+        self.inverse_sm_axis = None
+        self.universal_variable = None
+        self.stumpff_param = None
 
-        super().__init__(step_size)
+        if loggers is None:  # Default loggers.
+            loggers = [logging.StateLogger(), logging.UniversalVariableLogger()]
+
+        super().__init__(loggers, step_size)
 
     def propagate(self):
         """
@@ -58,7 +69,11 @@ class UniversalVariable(base.Propagator):
         initial_time = self.orbit.time
         initial_position = self.orbit.position.copy()
         initial_velocity = self.orbit.velocity.copy()
-        universal_variable = 0  # By definition always starts at 0 when propagation begins.
+        self.universal_variable = 0  # By definition always starts at 0 when propagation begins.
+
+        # Set up Loggers.
+        for logger in self.loggers:
+            logger.setup(self)
 
         # Compute the inverse of the semi-major axis. This is needed to handle parabolic orbits where otherwise division
         # by a semi-major axis of 0 would occur.
@@ -68,49 +83,51 @@ class UniversalVariable(base.Propagator):
         )
 
         # Propagation.
-        for timestep in range(1, self.time_history.shape[1]):
+        for timestep in range(1, self.timesteps):
             self.orbit.time += self.step_size
 
             # Compute new universal variable. Use the previous universal variable as the initial guess for the
             # root-finder.
-            universal_variable = self.kepler_equation(
+            self.universal_variable = self.kepler_equation(
                 initial_time=initial_time,
                 initial_position=initial_position,
                 initial_velocity=initial_velocity,
-                initial_guess=universal_variable,
+                initial_guess=self.universal_variable,
             )
 
             # Compute the Stumpff (c and s) functions.
-            stumpff_param = self.inverse_sm_axis * universal_variable ** 2
-            s_func, c_func = self.stumpff_funcs(stumpff_param)
+            self.stumpff_param = self.inverse_sm_axis * self.universal_variable ** 2
+            s_func, c_func = self.stumpff_funcs(self.stumpff_param)
 
             # Compute the f and g functions.
-            f_func = 1 - universal_variable ** 2 / np.linalg.norm(initial_position) * c_func
-            g_func = self.orbit.time - initial_time - universal_variable ** 3 / np.sqrt(self.orbit.grav_param) * s_func
+            f_func = 1 - self.universal_variable ** 2 / np.linalg.norm(initial_position) * c_func
+            g_func = (
+                    self.orbit.time - initial_time
+                        - self.universal_variable ** 3 / np.sqrt(self.orbit.grav_param) * s_func
+            )
 
-            # Compute new position.
+            # Compute new position (and true anomaly).
             self.orbit.position = f_func * initial_position + g_func * initial_velocity
+            self.orbit.update_true_anomaly()
 
             # Compute fdot and gdot functions.
             fdot_func = (
                     np.sqrt(self.orbit.grav_param)
                         / (np.linalg.norm(self.orbit.position) * np.linalg.norm(initial_position))
-                        * universal_variable * (stumpff_param * s_func - 1)
+                        * self.universal_variable * (self.stumpff_param * s_func - 1)
             )
             if self.fg_constraint:  # Only compute gdot function manually if constraint usage is disabled.
                 gdot_func = (g_func * fdot_func + 1) / f_func
             else:
-                gdot_func = 1 - universal_variable ** 2 / np.linalg.norm(self.orbit.position) * c_func
+                gdot_func = 1 - self.universal_variable ** 2 / np.linalg.norm(self.orbit.position) * c_func
 
             # Compute new velocities.
             self.orbit.velocity = fdot_func * initial_position + gdot_func * initial_velocity
 
-            # Add results to history arrays.
-            self.time_history[0, timestep] = self.orbit.time
-            self.position_history[:, timestep] = self.orbit.position
-            self.velocity_history[:, timestep] = self.orbit.velocity
+            # Save results.
+            self.log(timestep)
 
-    def stumpff_funcs(self, stumpff_param):
+    def stumpff_funcs(self, stumpff_param) -> tuple[float, float]:
         """
         Special series which converge absolutely for any value of the Stumpff parameter, defined as the inverse of the
         semi-major axis times the universal variable squared. For "large" negative or positive values of the parameter

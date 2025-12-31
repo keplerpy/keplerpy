@@ -28,7 +28,7 @@ class Mission:
             self.satellite = satellite
 
         if propagator is None:
-            self.propagator = propagation.universal_variable.UniversalVariable(solver_tol=1e-8)
+            self.propagator = propagation.universal_variable.UniversalVariablePropagator(solver_tol=1e-8)
         else:
             self.propagator = propagator
 
@@ -48,7 +48,12 @@ class Mission:
             final_time=self.final_global_time
         )
         self.propagator.propagate()
-        self.traj = self.propagator.position_history
+
+        # TODO: Error handling for missing a state logger.
+        for logger in self.propagator.loggers:
+            if isinstance(logger, propagation.logging.StateLogger):
+                self.traj = logger.position_history
+                break
 
     def display(self):
         """
@@ -68,17 +73,23 @@ class Mission:
         :param fp_accuracy: How many sig figs past the decimal data should be logged to.
         """
 
-        positions_to_log = self.propagator.position_history.copy()
-        velocities_to_log = self.propagator.velocity_history.copy()
+        # TODO: Error handling for missing a state logger.
+        for logger in self.propagator.loggers:
+            if isinstance(logger, propagation.logging.StateLogger):
+                times_to_log = logger.time_history.copy()
+                positions_to_log = logger.position_history.copy()
+                velocities_to_log = logger.velocity_history.copy()
 
-        positions_to_log = positions_to_log.T
-        velocities_to_log = velocities_to_log.T
+                times_to_log = times_to_log.T
+                positions_to_log = positions_to_log.T
+                velocities_to_log = velocities_to_log.T
 
-        labels = ['x-position', 'y-position', 'z-position', 'x-velocity', 'y-velocity', 'z-velocity']
-        data_arr = np.hstack((positions_to_log, velocities_to_log))
-        data_df = pd.DataFrame(data_arr, columns=labels)
-        data_df.to_csv(
-            f"{file_path}.csv",
-            index=False,
-            float_format=f"%.{fp_accuracy}f"
-        )
+                labels = ['time', 'x-position', 'y-position', 'z-position', 'x-velocity', 'y-velocity', 'z-velocity']
+                data_arr = np.hstack((times_to_log, positions_to_log, velocities_to_log))
+                data_df = pd.DataFrame(data_arr, columns=labels)
+                data_df.to_csv(
+                    f"{file_path}.csv",
+                    index=False,
+                    float_format=f"%.{fp_accuracy}f"
+                )
+                break

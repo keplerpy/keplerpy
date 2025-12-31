@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 from .. import orbits
+from . import logging
 
 
 class Propagator(ABC):
@@ -17,23 +18,21 @@ class Propagator(ABC):
         when it is passed in serve as the initial conditions of the orbit.
     :ivar final time: When to stop orbit propagation.
     :ivar step_size: Time step size for propagation.
-    :ivar position_history: List of orbital positions (3, ) as a (3, length of propagation) array.
-    :ivar velocity_history: List of orbital velocities (3, ) as a (3, length of propagation) array.
-    :ivar time_history: List of time steps as a (1, length of propagation) array.
+    :ivar timesteps: How many discrete timesteps to propagate for.
     """
 
-    def __init__(self, step_size: float = None):
+    def __init__(self, loggers: list[logging.Logger], step_size: float):
         """
-        Pre-initialization, all these attributes (excluding step_size) are not filled in till setup() is called.
+        Pre-initialization, all these attributes (excluding step_size and loggers) are not filled in till setup() is
+        called.
         """
 
         self.step_size = step_size
+        self.loggers = loggers
 
         self.orbit = None
         self.final_time = None
-        self.position_history = None
-        self.velocity_history = None
-        self.time_history = None
+        self.timesteps = None
 
     @abstractmethod
     def propagate(self):
@@ -55,18 +54,19 @@ class Propagator(ABC):
         """
 
         self.orbit = orbit
+
+        # Compute number of timesteps to propagate for and use this information to set up the Loggers.
         self.final_time = final_time
         if self.step_size is None:  # Default to 10000 steps.
             self.step_size = (final_time - self.orbit.time) / 10000
 
-        # Initialize history arrays. During propagation there will be N timesteps plus the initial timestep so the
-        # arrays need to be of size N+1.
-        timesteps = int(np.floor((self.final_time - orbit.time) / self.step_size))
-        self.position_history = np.zeros([3, timesteps + 1])
-        self.velocity_history = np.zeros([3, timesteps + 1])
-        self.time_history = np.zeros([1, timesteps + 1])
+        self.timesteps = int(np.floor((self.final_time - orbit.time) / self.step_size))
 
-        # Assign initial conditions to the history arrays.
-        self.position_history[:, 0] = orbit.position
-        self.velocity_history[:, 0] = orbit.velocity
-        self.time_history[0, 0] = orbit.time
+    def log(self, timestep):
+        """
+        Store current information regarding the orbit.
+
+        :param timestep: Current discrete timestep in propagation.
+        """
+        for logger in self.loggers:
+            logger.log(propagator=self, timestep=timestep)
