@@ -19,9 +19,9 @@ class KeplerPropagator(base.Propagator):
     def __init__(
             self,
             loggers: list[logging.Logger] = None,
-            step_size=None,
-            solver_tol=1e-8,
-            fg_constraint=True
+            step_size: float = None,
+            solver_tol: float = 1e-8,
+            fg_constraint: bool = True
     ):
         self.fg_constraint = fg_constraint
         self.solver_tol = solver_tol

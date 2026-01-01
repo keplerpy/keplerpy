@@ -7,7 +7,9 @@ if TYPE_CHECKING:
     from . import base, kepler, universal_variable
 
 
-# TODO: Fix the exceptions for propagator-specific loggers.
+# TODO:
+#  - Fix the exceptions for propagator-specific loggers.
+#  - Add labels to all these variables for when they are stored in a .csv.
 class Logger(ABC):
     """
     Base class for all loggers. A Logger is meant to be instantiated in the setup() method of a Propagator and is called

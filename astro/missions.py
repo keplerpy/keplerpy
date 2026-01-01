@@ -1,39 +1,36 @@
-from . import propagation, orbits
+from . import propagation, orbits, perturbations
 from ui import rendering
 import numpy as np
 import pandas as pd
 
 
+# TODO: Redo logging to be dynamic for the new Logger class.
 class Mission:
     def __init__(
             self,
             starting_orbit: orbits.Orbit,
-            maneuvers,
             initial_global_time: float,
             final_global_time: float,
             propagator: propagation.base.Propagator = None,
-            satellite=None,
+            perturbing_forces: list[perturbations.Perturbation] = None,
+
     ):
         # Instantiate all the passed-in attributes.
         self.starting_orbit = starting_orbit
+        self.perturbing_forces = perturbing_forces
         self.global_time = initial_global_time
         self.initial_global_time = initial_global_time
         self.final_global_time = final_global_time
 
-        # For both the propagator and satellite a default option exists if the user does not input one, if they did
+        # For both the propagator a default option exists if the user does not input one, if they did
         # ignore and simply instantiate as normal.
-        if satellite is None:
-            self.satellite = ...  # TODO: Add a generic cube-sat.
-        else:
-            self.satellite = satellite
-
         if propagator is None:
-            self.propagator = propagation.universal_variable.UniversalVariablePropagator(solver_tol=1e-8)
+            if perturbing_forces is None:
+                self.propagator = propagation.universal_variable.UniversalVariablePropagator()
+            else:
+                self.propagator = propagation.cowell.CowellPropagator()
         else:
             self.propagator = propagator
-
-        # TODO: Add maneuvers.
-        self.maneuvers = maneuvers
 
         # Pre-instantiate attributes to be assigned later.
         self.traj = ...
@@ -45,6 +42,7 @@ class Mission:
 
         self.propagator.setup(
             orbit=self.starting_orbit,
+            perturbing_forces=self.perturbing_forces,
             final_time=self.final_global_time
         )
         self.propagator.propagate()
