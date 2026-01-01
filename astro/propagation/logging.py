@@ -67,7 +67,7 @@ class StateLogger(Logger):
 
 class ElementsLogger(Logger):
     """
-    Logs the classical orbital elements (and their singularity cases) of the orbit.
+    Logs the orbital elements of the orbit.
     """
 
     def setup(self, propagator: "base.Propagator"):
@@ -91,6 +91,17 @@ class ElementsLogger(Logger):
         self.argl_history[0, 0] = propagator.orbit.argl
         self.true_latitude_history[0, 0] = propagator.orbit.true_latitude
 
+        if propagator.orbit.track_equinoctial:
+            self.e_component1_history = np.zeros([1, propagator.timesteps + 1])
+            self.e_component2_history = np.zeros([1, propagator.timesteps + 1])
+            self.n_component1_history = np.zeros([1, propagator.timesteps + 1])
+            self.n_component2_history = np.zeros([1, propagator.timesteps + 1])
+
+            self.e_component1_history[0, 0] = propagator.orbit.e_component1
+            self.e_component2_history[0, 0] = propagator.orbit.e_component2
+            self.n_component1_history[0, 0] = propagator.orbit.n_component1
+            self.n_component2_history[0, 0] = propagator.orbit.n_component2
+
     def log(self, propagator: "base.Propagator", timestep: int):
         self.sm_axis_history[0, timestep] = propagator.orbit.sm_axis
         self.eccentricity_history[0, timestep] = propagator.orbit.eccentricity
@@ -101,6 +112,12 @@ class ElementsLogger(Logger):
         self.longp_history[0, timestep] = propagator.orbit.longp
         self.argl_history[0, timestep] = propagator.orbit.argl
         self.true_latitude_history[0, timestep] = propagator.orbit.true_latitude
+
+        if propagator.orbit.track_equinoctial:
+            self.e_component1_history[0, timestep] = propagator.orbit.e_component1
+            self.e_component2_history[0, timestep] = propagator.orbit.e_component2
+            self.n_component1_history[0, timestep] = propagator.orbit.n_component1
+            self.n_component2_history[0, timestep] = propagator.orbit.n_component2
 
 class EccentricAnomalyLogger(Logger):
     """

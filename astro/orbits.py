@@ -4,7 +4,6 @@ from . import propagation, conversions
 import scipy as sp
 
 
-# TODO: Implement logging equinoctial orbital elements.
 class Orbit:
     """
     Class which holds current Cartesian state of the orbit as attributes. Also includes functions to convert between
@@ -35,15 +34,17 @@ class Orbit:
     :ivar n_component2:
     :ivar true_latitude: (True longitude) Angle between the ecliptic 1-axis and positon vector.
 
-    [OTHER ORBITAL ELEMENTS]
+    [OTHER ORBITAL PARAMETER]
     :ivar longp: (Longitude of periapsis) Angle between the ecliptic 1-axis and eccentricity vector.
     :ivar argl: (Argument of latitude) Angle between the line of nodes and position vector.
-
-    [OTHER PARAMETERS]
     :ivar spf_angular_momentum: Angular momentum per unit mass of the orbit, a (3, ) vector.
     :ivar eccentricity_vec: The direction of periapsis wrt. the central body, a (3, ) vector.
     :ivar nodal_vec: The direction of the right ascending node wrt. the central body, a (3, ) vector. This lies along
         the line of nodes which marks the intersection between the orbital and ecliptic planes.
+
+    [BOOKKEEPING]
+    :ivar track_equinoctial: Whether to record and update the equinoctial orbital elements in addition to the classical
+        orbital elements.
     """
 
     def __init__(
@@ -51,15 +52,29 @@ class Orbit:
             position: NDArray[float],
             velocity: NDArray[float],
             time: float,
-            grav_param: float=3.986004418e14  # Default to Earth in units of m^3/s^2.
+            grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
+            track_equinoctial: bool = False,
+            *,  # Hides parameters beneath this from the user.
+            _default: bool = True,
     ):
+        """
+        NOTE: A "hidden" variable, _default, is passed to this function. This denotes whether a state-based
+        parameterization method was used to construct the orbit. If another method such as some type of orbital elements
+        was used instead the call to the update_all() method is skipped as this would lead to immediately recomputing
+        parameters the user just passed in.
+        """
+
         self.position = position
         self.velocity = velocity
         self.time = time
         self.grav_param = grav_param
+        self.track_equinoctial = track_equinoctial
 
         # Compute orbital elements along with other useful attributes.
-        self.update_all()
+        if _default:
+            self.update_classical()
+            if self.track_equinoctial:
+                self.update_equinoctial()
 
     # ---------------------------------
     # ALTERNATE INSTANTIATION FUNCTIONS
@@ -70,13 +85,14 @@ class Orbit:
             position: NDArray[float],
             velocity: NDArray[float],
             time,
-            grav_param=3.986004418e14  # Default to Earth in units of m^3/s^2.
+            grav_param=3.986004418e14,  # Default to Earth in units of m^3/s^2.
+            track_equinoctial: bool = False,
     ) -> "Orbit":
         """
         Identical to the __init__() function. Returns an Orbit object based on the position and velocity.
         """
 
-        return cls(position, velocity, time, grav_param)
+        return cls(position, velocity, time, grav_param, track_equinoctial)
 
     @classmethod
     def from_classical_elements(
@@ -88,7 +104,8 @@ class Orbit:
             argp: float,
             true_anomaly: float,
             time: float,
-            grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
+            grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
+            track_equinoctial: bool = False,
     ) -> "Orbit":
         """
         Alternative constructor which takes in the classical orbital elements and calls elements_2_state() to convert
@@ -102,9 +119,28 @@ class Orbit:
             inclination=inclination,
             argp=argp,
             true_anomaly=true_anomaly,
-            grav_param=grav_param
+            grav_param=grav_param,
         )
-        return cls(position, velocity, time, grav_param)
+        orbit = cls(position, velocity, time, grav_param, track_equinoctial, _default=False)
+
+        # Store/compute orbital elements.
+        orbit.update_spf_angular_momentum()
+        orbit.update_eccentricity()
+        orbit.update_nodal_vec()
+        orbit.update_sl_rectum()
+        orbit.sm_axis = sm_axis
+        orbit.raan = raan
+        orbit.inclination = inclination
+        orbit.argp = argp
+        orbit.true_anomaly = true_anomaly
+        orbit.update_longp()
+        orbit.update_argl()
+        orbit.update_true_latitude()
+
+        if track_equinoctial:
+            orbit.update_equinoctial()
+
+        return orbit
 
     @classmethod
     def from_classical_elements_p(
@@ -116,7 +152,8 @@ class Orbit:
         argp: float,
         true_anomaly: float,
         time: float,
-        grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
+        grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
+        track_equinoctial: bool = False,
     ) -> "Orbit":
         """
         Same as from_classical_elements() but explicitly for parabolic orbits where semi-major axis is not defined and
@@ -132,8 +169,26 @@ class Orbit:
             true_anomaly=true_anomaly,
             grav_param=grav_param
         )
-        return cls(position, velocity, time, grav_param)
+        orbit = cls(position, velocity, time, grav_param, track_equinoctial, _default=False)
 
+        # Store/compute orbital elements.
+        orbit.update_spf_angular_momentum()
+        orbit.update_eccentricity()
+        orbit.update_nodal_vec()
+        orbit.sl_rectum = sl_rectum
+        orbit.sm_axis = np.inf
+        orbit.raan = raan
+        orbit.inclination = inclination
+        orbit.argp = argp
+        orbit.true_anomaly = true_anomaly
+        orbit.update_longp()
+        orbit.update_argl()
+        orbit.update_true_latitude()
+
+        if track_equinoctial:
+            orbit.update_equinoctial()
+
+        return orbit
 
     @classmethod
     def from_equinoctial_elements(
@@ -145,7 +200,8 @@ class Orbit:
             n_component2: float,
             true_latitude: float,
             time: float,
-            grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
+            grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
+            track_equinoctial: bool = True,
     ) -> "Orbit":
         """
         Modified equinoctial version of from_classical_elements().
@@ -159,7 +215,38 @@ class Orbit:
             n_component2=n_component2,
             true_latitude=true_latitude,
         )
-        return cls(position, velocity, time, grav_param)
+        orbit = cls(position, velocity, time, grav_param, track_equinoctial, _default=False)
+
+        # Store/compute orbital elements.
+        sm_axis, eccentricity, raan, argp, inclination, true_anomaly = conversions.equinoctial_2_classical(
+            sl_rectum=sl_rectum,
+            e_component1=e_component1,
+            e_component2=e_component2,
+            n_component1=n_component1,
+            n_component2=n_component2,
+            true_latitude=true_latitude,
+        )
+
+        orbit.update_spf_angular_momentum()
+        orbit.update_eccentricity()
+        orbit.update_nodal_vec()
+        orbit.sl_rectum = sl_rectum
+        orbit.sm_axis = sm_axis
+        orbit.raan = raan
+        orbit.inclination = inclination
+        orbit.argp = argp
+        orbit.true_anomaly = true_anomaly
+        orbit.update_longp()
+        orbit.update_argl()
+        orbit.true_latitude = true_latitude
+
+        if track_equinoctial:
+            orbit.e_component1 = e_component1
+            orbit.e_component2 = e_component2
+            orbit.n_component1 = n_component1
+            orbit.n_component2 = n_component2
+
+        return orbit
 
     @classmethod
     def from_gibbs(
@@ -169,7 +256,8 @@ class Orbit:
             position3: NDArray[float],
             time: float,
             current_position_index: int = 2,
-            grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
+            grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
+            track_equinoctial: bool = False,
     ) -> "Orbit":
         """
         Alternative constructor which returns the position and velocity given three co-planar position vectors. The
@@ -188,6 +276,7 @@ class Orbit:
         [OTHER PARAMETERS]
         :param time:
         :param grav_param:
+        :param track_equinoctial:
         """
 
         # Form the three vectors used in Gibbs' method. The first two correspond to sl_rectum = vec1 / vec2, and the
@@ -219,7 +308,7 @@ class Orbit:
                     + np.sqrt(grav_param / (np.linalg.norm(gibbs_vec1) * np.linalg.norm(gibbs_vec2))) * gibbs_vec3
         )
 
-        return cls(position, velocity, time, grav_param)
+        return cls(position, velocity, time, grav_param, track_equinoctial)
 
     @classmethod
     def from_lambert(
@@ -229,6 +318,7 @@ class Orbit:
             tof: float,
             time: float,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
+            track_equinoctial: bool = False,
             current_position_index: int = 1,
             short_transfer: bool = True,
             prograde: bool = True,
@@ -268,6 +358,7 @@ class Orbit:
         [OTHER PARAMETERS]
         :param time: Global time at current position vector, not the same as tof.
         :param grav_param:
+        :param track_equinoctial:
         """
 
         # Compute the true anomaly between the two position vectors, then use the short_transfer flag to decide if the
@@ -343,7 +434,7 @@ class Orbit:
                     velocity1 = (position2 - f_func * position1) / g_func
                     velocity = fdot_func * position1 + gdot_func * velocity1
 
-        return cls(position, velocity, time, grav_param)
+        return cls(position, velocity, time, grav_param, track_equinoctial)
 
     # ------------------------------
     # ORBITAL ELEMENT UPDATE METHODS
@@ -396,6 +487,18 @@ class Orbit:
             argp += 2 * np.pi
         self.argp = argp
 
+    def update_e_component1(self):
+        self.e_component1 = self.eccentricity * np.cos(self.argp + self.raan)
+
+    def update_e_component2(self):
+        self.e_component2 = self.eccentricity * np.sin(self.argp + self.raan)
+
+    def update_n_component1(self):
+        self.n_component1 = np.tan(self.inclination / 2) * np.cos(self.raan)
+
+    def update_n_component2(self):
+        self.n_component2 = np.tan(self.inclination / 2) * np.sin(self.raan)
+
     def update_true_anomaly(self):
         true_anomaly = np.arctan2(
             np.dot(self.position, np.cross(self.spf_angular_momentum, self.eccentricity_vec)),
@@ -424,19 +527,16 @@ class Orbit:
         self.true_latitude = true_latitude
 
 
-    def update_all(self):
+    def update_classical(self):
         """
-        Master function which updates all the orbital parameters based on the given position and velocity.
+        Master function which updates all the classical orbital parameters based on the given position and velocity.
         """
 
         self.update_spf_angular_momentum()
         self.update_eccentricity()
         self.update_nodal_vec()
         self.update_sl_rectum()
-        if self.eccentricity == 1:  # Handle parabolic case.
-            self.sm_axis = np.inf
-        else:
-            self.update_sm_axis()
+        self.update_sm_axis()
         self.update_raan()
         self.update_inclination()
         self.update_argp()
@@ -444,3 +544,15 @@ class Orbit:
         self.update_longp()
         self.update_argl()
         self.update_true_latitude()
+
+    def update_equinoctial(self):
+        """
+        Master function which updates all the modified equinoctial orbital parameters based on the given position and
+        velocity. Note that this does not update the semi-latus rectum and true latitude as those are already handled in
+        update_classical().
+        """
+
+        self.update_e_component1()
+        self.update_e_component2()
+        self.update_n_component1()
+        self.update_n_component2()

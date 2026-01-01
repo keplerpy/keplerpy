@@ -93,6 +93,8 @@ def equinoctial_elements_2_state(
 ):
     """
     Modified equinoctial version of classic_elements_2_state().
+
+    NOTE: For a description of the input parameters see the docstring for the parent Orbit class.
     """
 
     # Intermediate variables.
@@ -135,7 +137,7 @@ def classical_2_equinoctial(
         true_anomaly: float,
 ) -> tuple[float, float, float, float, float, float]:
     """
-    Convert the classical orbital elements to the modified equinoctial orbital elements.
+    Converts the classical orbital elements to the modified equinoctial orbital elements.
     """
     sl_rectum = sm_axis * (1 - eccentricity ** 2)
     e_component1 = eccentricity * np.cos(argp + raan)
@@ -155,7 +157,7 @@ def equinoctial_2_classical(
         true_latitude: float,
 ) -> tuple[float, float, float, float, float, float]:
     """
-    Convert the modified equinoctial orbital elements to the classical orbital elements.
+    Converts the modified equinoctial orbital elements to the classical orbital elements.
     """
 
     sm_axis = sl_rectum / (1 - e_component1 ** 2 - e_component2 ** 2)
@@ -171,4 +173,4 @@ def equinoctial_2_classical(
     raan = np.arctan2(n_component2, n_component1)
     true_anomaly = true_latitude - np.arctan2(e_component2, e_component1)
 
-    return sm_axis, eccentricity, inclination, raan, argp, true_anomaly
+    return sm_axis, eccentricity, raan, argp, inclination, true_anomaly
