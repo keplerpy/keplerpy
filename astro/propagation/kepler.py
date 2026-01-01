@@ -43,12 +43,6 @@ class KeplerPropagator(base.Propagator):
             5) Repeat 2-4 until the final time is reached.
         """
 
-        # Warning for near-parabolic orbits.
-        if abs(1 - self.orbit.eccentricity) < 0.05:
-            raise Warning("This orbit is near-parabolic and as a result convergence using KeplerSolver will be "
-                          "inaccurate at best if it occurs at all. Switching to a different propagator suited to these"
-                          "cases like UniversalVariablePropagator is recommended.")
-
         # Get initial values used for propagation.
         initial_time = self.orbit.time
         initial_position = self.orbit.position.copy()
@@ -60,7 +54,7 @@ class KeplerPropagator(base.Propagator):
         for logger in self.loggers:
             logger.setup(self)
 
-        for timestep in range(1, self.timesteps):
+        for timestep in range(1, self.timesteps + 1):
             self.orbit.time += self.step_size
 
             # -------------
@@ -89,6 +83,8 @@ class KeplerPropagator(base.Propagator):
                 # Compute new position (and true anomaly).
                 self.orbit.position = f_func * initial_position + g_func * initial_velocity
                 self.orbit.update_true_anomaly()
+                self.orbit.update_argl()
+                self.orbit.update_true_latitude()
 
                 # Compute fdot and gdot functions.
                 fdot_func = (
@@ -131,6 +127,8 @@ class KeplerPropagator(base.Propagator):
                 # Compute new position (and true anomaly).
                 self.orbit.position = f_func * initial_position + g_func * initial_velocity
                 self.orbit.update_true_anomaly()
+                self.orbit.update_argl()
+                self.orbit.update_true_latitude()
 
                 # Compute fdot and gdot functions.
                 fdot_func = (

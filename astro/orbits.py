@@ -1,10 +1,10 @@
 import numpy as np
 from numpy.typing import NDArray
-from dynamics import dcms
-from . import propagation
+from . import propagation, conversions
 import scipy as sp
 
 
+# TODO: Implement logging equinoctial orbital elements.
 class Orbit:
     """
     Class which holds current Cartesian state of the orbit as attributes. Also includes functions to convert between
@@ -22,10 +22,22 @@ class Orbit:
     [CLASSICAL ORBITAL ELEMENTS]
     :ivar sm_axis: 1/2 length of the orbit's major axis.
     :ivar eccentricity: How elliptical orbit is.
-    :ivar raan: Angle between ecliptic 1-axis and nodal vector.
-    :ivar argp: Angle between nodal and eccentricity vectors in the orbital plane.
+    :ivar raan: (Longitude of the right ascending node) Angle between ecliptic 1-axis and nodal vector.
+    :ivar argp: (Argument of periapsis) Angle between nodal and eccentricity vectors in the orbital plane.
     :ivar inclination: Angle between orbital and ecliptic planes.
     :ivar true_anomaly: Current location of satellite along the orbit.
+
+    [MODIFIED EQUINOCTIAL ORBITAL ELEMENTS]
+    :ivar sl_rectum: 1/2 the length of the orbit's latus-rectum.
+    :ivar e_component1:
+    :ivar e_component2:
+    :ivar n_component1:
+    :ivar n_component2:
+    :ivar true_latitude: (True longitude) Angle between the ecliptic 1-axis and positon vector.
+
+    [OTHER ORBITAL ELEMENTS]
+    :ivar longp: (Longitude of periapsis) Angle between the ecliptic 1-axis and eccentricity vector.
+    :ivar argl: (Argument of latitude) Angle between the line of nodes and position vector.
 
     [OTHER PARAMETERS]
     :ivar spf_angular_momentum: Angular momentum per unit mass of the orbit, a (3, ) vector.
@@ -67,7 +79,7 @@ class Orbit:
         return cls(position, velocity, time, grav_param)
 
     @classmethod
-    def from_orbital_elements(
+    def from_classical_elements(
             cls,
             sm_axis: float,
             eccentricity: float,
@@ -79,11 +91,11 @@ class Orbit:
             grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
     ) -> "Orbit":
         """
-        Alternative constructor which takes in the orbital elements and calls elements_2_state() to convert to position
-        and velocity and from there generate an Orbit object.
+        Alternative constructor which takes in the classical orbital elements and calls elements_2_state() to convert
+        to position and velocity and from there generate an Orbit object.
         """
 
-        position, velocity = cls.elements_2_state(
+        position, velocity = conversions.classic_elements_2_state(
             sm_axis=sm_axis,
             eccentricity=eccentricity,
             raan=raan,
@@ -91,6 +103,61 @@ class Orbit:
             argp=argp,
             true_anomaly=true_anomaly,
             grav_param=grav_param
+        )
+        return cls(position, velocity, time, grav_param)
+
+    @classmethod
+    def from_classical_elements_p(
+        cls,
+        sl_rectum: float,
+        eccentricity: float,
+        raan: float,
+        inclination: float,
+        argp: float,
+        true_anomaly: float,
+        time: float,
+        grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
+    ) -> "Orbit":
+        """
+        Same as from_classical_elements() but explicitly for parabolic orbits where semi-major axis is not defined and
+        semi-latus rectum is used instead.
+        """
+
+        position, velocity = conversions.classic_elements_2_state_p(
+            sl_rectum=sl_rectum,
+            eccentricity=eccentricity,
+            raan=raan,
+            inclination=inclination,
+            argp=argp,
+            true_anomaly=true_anomaly,
+            grav_param=grav_param
+        )
+        return cls(position, velocity, time, grav_param)
+
+
+    @classmethod
+    def from_equinoctial_elements(
+            cls,
+            sl_rectum: float,
+            e_component1: float,
+            e_component2: float,
+            n_component1: float,
+            n_component2: float,
+            true_latitude: float,
+            time: float,
+            grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
+    ) -> "Orbit":
+        """
+        Modified equinoctial version of from_classical_elements().
+        """
+
+        position, velocity = conversions.equinoctial_elements_2_state(
+            sl_rectum=sl_rectum,
+            e_component1=e_component1,
+            e_component2=e_component2,
+            n_component1=n_component1,
+            n_component2=n_component2,
+            true_latitude=true_latitude,
         )
         return cls(position, velocity, time, grav_param)
 
@@ -103,7 +170,7 @@ class Orbit:
             time: float,
             current_position_index: int = 2,
             grav_param: float = 3.986004418e14  # Default to Earth in units of m^3/s^2.
-    ):
+    ) -> "Orbit":
         """
         Alternative constructor which returns the position and velocity given three co-planar position vectors. The
         process of determining the conic whose origin lies at the center of three co-planar vectors is known as Gibbs'
@@ -123,7 +190,7 @@ class Orbit:
         :param grav_param:
         """
 
-        # Form the three vectors used in Gibbs' method. The first two correspond to parameter = vec1 / vec2, and the
+        # Form the three vectors used in Gibbs' method. The first two correspond to sl_rectum = vec1 / vec2, and the
         # third comes from eccentricity = vec3 / vec2 in the derivation.
         gibbs_vec1 = (
                 np.linalg.norm(position3) * np.cross(position1, position2)
@@ -169,7 +236,7 @@ class Orbit:
             solver_tol=1e-8,
             stumpff_tol=1e-8,
             stumpff_series_length=10,
-    ):
+    ) -> "Orbit":
         """
         A universal variable implementation of Gauss' method to solving Lambert's problem. Lambert's problem involves
         finding the orbit which corresponds to two position vectors and the time-of-flight between them (whether that
@@ -219,9 +286,10 @@ class Orbit:
                 / np.sqrt(1 - np.cos(true_anomaly))
         )
 
-        # The UniversalVariablePropagator class contains a method called stumpff_funcs() which given a value of the Stumpff
-        # parameter evaluates the Stumpff series. We need this function so we're going to perform a pseudo-instantiation
-        # of this class to get access to it, only passing in attributes relevant to calling stumpff_funcs().
+        # The UniversalVariablePropagator class contains a method called stumpff_funcs() which given a value of the
+        # Stumpff parameter evaluates the Stumpff series. We need this function so we're going to perform a
+        # pseudo-instantiation of this class to get access to it, only passing in attributes relevant to calling
+        # stumpff_funcs().
         uv_propagator = propagation.universal_variable.UniversalVariablePropagator(
             stumpff_tol=stumpff_tol,
             stumpff_series_length=stumpff_series_length,
@@ -295,9 +363,11 @@ class Orbit:
         unit_vec_3 = np.array([0, 0, 1])
         self.nodal_vec = np.cross(unit_vec_3, self.spf_angular_momentum)
 
+    def update_sl_rectum(self):
+        self.sl_rectum = np.linalg.norm(self.spf_angular_momentum) ** 2 / self.grav_param
+
     def update_sm_axis(self):
-        parameter = np.linalg.norm(self.spf_angular_momentum) ** 2 / self.grav_param
-        self.sm_axis = parameter / (1 - self.eccentricity ** 2)
+        self.sm_axis = self.sl_rectum / (1 - self.eccentricity ** 2)
 
     def update_raan(self):
         unit_vec_1 = np.array([1, 0, 0])
@@ -335,6 +405,25 @@ class Orbit:
             true_anomaly += 2 * np.pi
         self.true_anomaly = true_anomaly
 
+    def update_longp(self):
+        longp = self.raan + self.argp
+        if longp > 2 * np.pi: # Wrap to [0, 2pi]. No need for < 0 wrapping since other angles are already wrapped.
+            longp -= 2 * np.pi
+        self.longp = longp
+
+    def update_argl(self):
+        argl = self.argp + self.true_anomaly
+        if argl > 2 * np.pi: # Wrap to [0, 2pi]. No need for < 0 wrapping since other angles are already wrapped.
+            argl -= 2 * np.pi
+        self.argl = argl
+
+    def update_true_latitude(self):
+        true_latitude = self.raan + self.argp + self.true_anomaly
+        if true_latitude > 2 * np.pi: # Wrap to [0, 2pi]. No need for < 0 wrapping since other angles are already wrapped.
+            true_latitude -= 2 * np.pi
+        self.true_latitude = true_latitude
+
+
     def update_all(self):
         """
         Master function which updates all the orbital parameters based on the given position and velocity.
@@ -343,54 +432,15 @@ class Orbit:
         self.update_spf_angular_momentum()
         self.update_eccentricity()
         self.update_nodal_vec()
-        self.update_sm_axis()
+        self.update_sl_rectum()
+        if self.eccentricity == 1:  # Handle parabolic case.
+            self.sm_axis = np.inf
+        else:
+            self.update_sm_axis()
         self.update_raan()
         self.update_inclination()
         self.update_argp()
         self.update_true_anomaly()
-
-    # ---------------------
-    # OTHER UTILITY METHODS
-    # ---------------------
-    @staticmethod
-    def elements_2_state(
-            sm_axis: float,
-            eccentricity: float,
-            raan: float,
-            argp: float,
-            inclination: float,
-            true_anomaly: float,
-            grav_param: float =3.986004418e14
-    ):
-        """
-        Given an orbit described by the classical orbital elements it generates the satellite's current position and
-        velocity. Position and velocity are constructed in the satellite's local frame using the elements, and then a
-        DCM is used to transform them back into the inertial frame of the central body.
-            The @staticmethod decorator is attached so that this may be called before an Orbit object is instantiated
-        such as for the from_elements() initializer.
-
-        NOTE: For a description of the input parameters see the docstring for the parent Orbit class.
-        """
-
-        # Construct the component's of position and velocity in the satellite's local frame.
-        parameter = sm_axis * (1 - eccentricity ** 2)
-        pos_magnitude = parameter / (1 + eccentricity * np.cos(true_anomaly))  # Trajectory eq.
-        pos_magnitude_dt = np.sqrt(grav_param / parameter) * eccentricity * np.sin(true_anomaly)
-        true_anomaly_dt = np.sqrt(grav_param * parameter) / pos_magnitude ** 2
-
-        # Construct the DCM from the local to ecliptic frame.
-        local_2_perifocal_dcm = dcms.euler_2_dcm(true_anomaly, 3).T
-        perifocal_2_inertial_dcm = (
-                dcms.euler_2_dcm(raan, 3).T
-                @ dcms.euler_2_dcm(inclination, 1).T
-                @ dcms.euler_2_dcm(argp, 3).T
-        )
-
-        # Compute position and velocity in the local frame and then transform them to the inertial frame.
-        position = np.array([pos_magnitude, 0, 0])
-        velocity = np.array([pos_magnitude_dt, pos_magnitude * true_anomaly_dt, 0])
-
-        position = perifocal_2_inertial_dcm @ local_2_perifocal_dcm @ position
-        velocity = perifocal_2_inertial_dcm @ local_2_perifocal_dcm @ velocity
-
-        return position, velocity
+        self.update_longp()
+        self.update_argl()
+        self.update_true_latitude()

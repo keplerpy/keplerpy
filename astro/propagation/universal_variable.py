@@ -82,7 +82,7 @@ class UniversalVariablePropagator(base.Propagator):
         )
 
         # Propagation.
-        for timestep in range(1, self.timesteps):
+        for timestep in range(1, self.timesteps + 1):
             self.orbit.time += self.step_size
 
             # Compute new universal variable. Use the previous universal variable as the initial guess for the
@@ -108,6 +108,8 @@ class UniversalVariablePropagator(base.Propagator):
             # Compute new position (and true anomaly).
             self.orbit.position = f_func * initial_position + g_func * initial_velocity
             self.orbit.update_true_anomaly()
+            self.orbit.update_argl()
+            self.orbit.update_true_latitude()
 
             # Compute fdot and gdot functions.
             fdot_func = (

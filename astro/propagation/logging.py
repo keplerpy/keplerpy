@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from . import base, kepler, universal_variable
 
 
+# TODO: Fix the exceptions for propagator-specific loggers.
 class Logger(ABC):
     """
     Base class for all loggers. A Logger is meant to be instantiated in the setup() method of a Propagator and is called
@@ -66,7 +67,7 @@ class StateLogger(Logger):
 
 class ElementsLogger(Logger):
     """
-    Logs the classical orbital elements of the orbit.
+    Logs the classical orbital elements (and their singularity cases) of the orbit.
     """
 
     def setup(self, propagator: "base.Propagator"):
@@ -76,6 +77,9 @@ class ElementsLogger(Logger):
         self.raan_history = np.zeros([1, propagator.timesteps + 1])
         self.argp_history = np.zeros([1, propagator.timesteps + 1])
         self.true_anomaly_history = np.zeros([1, propagator.timesteps + 1])
+        self.longp_history = np.zeros([1, propagator.timesteps + 1])
+        self.argl_history = np.zeros([1, propagator.timesteps + 1])
+        self.true_latitude_history = np.zeros([1, propagator.timesteps + 1])
 
         self.sm_axis_history[0, 0] = propagator.orbit.sm_axis
         self.eccentricity_history[0, 0] = propagator.orbit.eccentricity
@@ -83,6 +87,9 @@ class ElementsLogger(Logger):
         self.raan_history[0, 0] = propagator.orbit.raan
         self.argp_history[0, 0] = propagator.orbit.argp
         self.true_anomaly_history[0, 0] = propagator.orbit.true_anomaly
+        self.longp_history[0, 0] = propagator.orbit.longp
+        self.argl_history[0, 0] = propagator.orbit.argl
+        self.true_latitude_history[0, 0] = propagator.orbit.true_latitude
 
     def log(self, propagator: "base.Propagator", timestep: int):
         self.sm_axis_history[0, timestep] = propagator.orbit.sm_axis
@@ -91,6 +98,9 @@ class ElementsLogger(Logger):
         self.raan_history[0, timestep] = propagator.orbit.raan
         self.argp_history[0, timestep] = propagator.orbit.argp
         self.true_anomaly_history[0, timestep] = propagator.orbit.true_anomaly
+        self.longp_history[0, timestep] = propagator.orbit.longp
+        self.argl_history[0, timestep] = propagator.orbit.argl
+        self.true_latitude_history[0, timestep] = propagator.orbit.true_latitude
 
 class EccentricAnomalyLogger(Logger):
     """
