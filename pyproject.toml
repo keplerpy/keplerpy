@@ -12,3 +12,7 @@ dependencies = [
     "scipy",
     "pygfx"
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hohmannpy*"]
