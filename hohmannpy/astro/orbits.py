@@ -112,7 +112,7 @@ class Orbit:
         to position and velocity and from there generate an Orbit object.
         """
 
-        position, velocity = conversions.classic_elements_2_state(
+        position, velocity = conversions.classical_2_state(
             sm_axis=sm_axis,
             eccentricity=eccentricity,
             raan=raan,
@@ -207,7 +207,7 @@ class Orbit:
         Modified equinoctial version of from_classical_elements().
         """
 
-        position, velocity = conversions.equinoctial_elements_2_state(
+        position, velocity = conversions.equinoctial_2_state(
             sl_rectum=sl_rectum,
             e_component1=e_component1,
             e_component2=e_component2,

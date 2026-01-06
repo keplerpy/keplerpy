@@ -10,7 +10,8 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "scipy",
-    "pygfx"
+    "pygfx",
+    "pandas"
 ]
 
 [tool.setuptools.packages.find]

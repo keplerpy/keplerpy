@@ -17,3 +17,6 @@ class NonSphericalEarth(Perturbation):
 
     def evaluate(self, time: float, state: NDArray[float]) -> tuple[float, float, float]:
         pass
+
+    def compute_lat_and_long(self, time, state):
+        pass
