@@ -1,4 +1,4 @@
-from . import propagation, orbits, perturbations
+from . import propagation, orbit, perturbations
 from ..ui import rendering
 import numpy as np
 import pandas as pd
@@ -8,7 +8,7 @@ import pandas as pd
 class Mission:
     def __init__(
             self,
-            starting_orbit: orbits.Orbit,
+            starting_orbit: orbit.Orbit,
             initial_global_time: float,
             final_global_time: float,
             propagator: propagation.base.Propagator = None,
@@ -43,7 +43,7 @@ class Mission:
         self.propagator.setup(
             orbit=self.starting_orbit,
             perturbing_forces=self.perturbing_forces,
-            final_time=self.final_global_time
+            final_time=self.final_global_time - self.initial_global_time,
         )
         self.propagator.propagate()
 

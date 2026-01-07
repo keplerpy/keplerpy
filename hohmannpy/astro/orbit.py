@@ -51,7 +51,6 @@ class Orbit:
             self,
             position: NDArray[float],
             velocity: NDArray[float],
-            time: float,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
             *,  # Hides parameters beneath this from the user.
@@ -66,7 +65,7 @@ class Orbit:
 
         self.position = position
         self.velocity = velocity
-        self.time = time
+        self.time = 0
         self.grav_param = grav_param
         self.track_equinoctial = track_equinoctial
 
@@ -84,7 +83,6 @@ class Orbit:
             cls,
             position: NDArray[float],
             velocity: NDArray[float],
-            time,
             grav_param=3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
     ) -> "Orbit":
@@ -92,7 +90,7 @@ class Orbit:
         Identical to the __init__() function. Returns an Orbit object based on the position and velocity.
         """
 
-        return cls(position, velocity, time, grav_param, track_equinoctial)
+        return cls(position, velocity, grav_param, track_equinoctial)
 
     @classmethod
     def from_classical_elements(
@@ -103,7 +101,6 @@ class Orbit:
             inclination: float,
             argp: float,
             true_anomaly: float,
-            time: float,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
     ) -> "Orbit":
@@ -121,7 +118,7 @@ class Orbit:
             true_anomaly=true_anomaly,
             grav_param=grav_param,
         )
-        orbit = cls(position, velocity, time, grav_param, track_equinoctial, _default=False)
+        orbit = cls(position, velocity, grav_param, track_equinoctial, _default=False)
 
         # Store/compute orbital elements.
         orbit.update_spf_angular_momentum()
@@ -151,7 +148,6 @@ class Orbit:
         inclination: float,
         argp: float,
         true_anomaly: float,
-        time: float,
         grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
         track_equinoctial: bool = False,
     ) -> "Orbit":
@@ -169,7 +165,7 @@ class Orbit:
             true_anomaly=true_anomaly,
             grav_param=grav_param
         )
-        orbit = cls(position, velocity, time, grav_param, track_equinoctial, _default=False)
+        orbit = cls(position, velocity, grav_param, track_equinoctial, _default=False)
 
         # Store/compute orbital elements.
         orbit.update_spf_angular_momentum()
@@ -199,7 +195,6 @@ class Orbit:
             n_component1: float,
             n_component2: float,
             true_latitude: float,
-            time: float,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = True,
     ) -> "Orbit":
@@ -215,7 +210,7 @@ class Orbit:
             n_component2=n_component2,
             true_latitude=true_latitude,
         )
-        orbit = cls(position, velocity, time, grav_param, track_equinoctial, _default=False)
+        orbit = cls(position, velocity, grav_param, track_equinoctial, _default=False)
 
         # Store/compute orbital elements.
         orbit.update_spf_angular_momentum()
@@ -245,7 +240,6 @@ class Orbit:
             position1: NDArray[float],
             position2: NDArray[float],
             position3: NDArray[float],
-            time: float,
             current_position_index: int = 2,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
@@ -265,7 +259,6 @@ class Orbit:
         :param current_position_index: Which position vector the satellite currently is located at.
 
         [OTHER PARAMETERS]
-        :param time:
         :param grav_param:
         :param track_equinoctial:
         """
@@ -299,7 +292,7 @@ class Orbit:
                     + np.sqrt(grav_param / (np.linalg.norm(gibbs_vec1) * np.linalg.norm(gibbs_vec2))) * gibbs_vec3
         )
 
-        return cls(position, velocity, time, grav_param, track_equinoctial)
+        return cls(position, velocity, grav_param, track_equinoctial)
 
     @classmethod
     def from_lambert(
@@ -307,7 +300,6 @@ class Orbit:
             position1: NDArray[float],
             position2: NDArray[float],
             tof: float,
-            time: float,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
             current_position_index: int = 1,
@@ -347,7 +339,6 @@ class Orbit:
             definitions.
 
         [OTHER PARAMETERS]
-        :param time: Global time at current position vector, not the same as tof.
         :param grav_param:
         :param track_equinoctial:
         """
@@ -425,7 +416,7 @@ class Orbit:
                     velocity1 = (position2 - f_func * position1) / g_func
                     velocity = fdot_func * position1 + gdot_func * velocity1
 
-        return cls(position, velocity, time, grav_param, track_equinoctial)
+        return cls(position, velocity, grav_param, track_equinoctial)
 
     # ------------------------------
     # ORBITAL ELEMENT UPDATE METHODS

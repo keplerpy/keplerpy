@@ -12,11 +12,14 @@ class Perturbation(ABC):
 
 
 class NonSphericalEarth(Perturbation):
-    def __init__(self):
+    def __init__(self, order: int, degree: int):
+        self.order = order
+        self.degree = degree
         super().__init__()
 
     def evaluate(self, time: float, state: NDArray[float]) -> tuple[float, float, float]:
         pass
 
     def compute_lat_and_long(self, time, state):
+        earth_rot = 7.292115e-5
         pass

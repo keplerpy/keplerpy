@@ -4,6 +4,7 @@ Astrodynamics utilities for designing and propagating orbits.
 
 from . import propagation
 from . import conversions
-from . import missions
-from . import orbits
+from .mission import Mission
+from .orbit import Orbit
+from .time import Time
 from . import perturbations

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from .. import orbits, perturbations
+from .. import orbit, perturbations
 from . import logging
 
 
@@ -49,7 +49,7 @@ class Propagator(ABC):
 
     def setup(
             self,
-            orbit: orbits.Orbit,
+            orbit: orbit.Orbit,
             perturbing_forces: list[perturbations.Perturbation],
             final_time: float,
     ):
