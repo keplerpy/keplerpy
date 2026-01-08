@@ -20,10 +20,10 @@ class NonSphericalEarth(Perturbation):
         self.degree = degree
         self.initial_gmst = gmst
 
-        with importlib.resources.files("hohmannpy.data").joinpath("egm84_c_coeffs.csv").open() as f:
+        with importlib.resources.files("hohmannpy.resources").joinpath("egm84_c_coeffs.csv").open() as f:
             self.c_coeffs = np.loadtxt(f, delimiter=",")
 
-        with importlib.resources.files("hohmannpy.data").joinpath("egm84_s_coeffs.csv").open() as f:
+        with importlib.resources.files("hohmannpy.resources").joinpath("egm84_s_coeffs.csv").open() as f:
             self.s_coeffs = np.loadtxt(f, delimiter=",")
 
         super().__init__()

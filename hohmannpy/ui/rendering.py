@@ -2,9 +2,13 @@ import pygfx as gfx
 from rendercanvas.auto import RenderCanvas, loop
 import numpy as np
 from numpy.typing import NDArray
+import importlib.resources
+import imageio.v3 as iio
+import pylinalg as la
 
 
 # TODO: This function is very WIP. It currently needs the following:
+#   - FIGURE OUT PYGFX COORDINATE SYSTEM SO I CAN ORIENT EVERYTHING PROPERLY!!!
 #   - Keyboard camera acceleration.
 #   - Need to clean up all of the variables, such as having camera radius be based on central body radius and have it
 #     be clamped between bounds.
@@ -15,7 +19,7 @@ class OrbitalCamera(gfx.PerspectiveCamera):
         super().__init__(fov, aspect)
 
         self._azimuth = 0
-        self._elevation = 0
+        self._elevation = -np.pi /2
         self.radius = radius
 
         self.azimuth_vel = 0
@@ -65,10 +69,18 @@ class OrbitalCamera(gfx.PerspectiveCamera):
 
 class TempRenderEngine:
     def __init__(self):
+        earth_mat = gfx.MeshPhongMaterial()
+        with importlib.resources.files("hohmannpy.resources").joinpath("earth_texture_map.jpg").open("rb") as f:
+            earth_img = iio.imread(f)
+            earth_img = np.ascontiguousarray(np.flipud(earth_img))
+        earth_mat.map = gfx.Texture(earth_img, dim=2)
+
         self.central_body = gfx.Mesh(
             gfx.sphere_geometry(radius=6371, width_segments=64, height_segments=32),
-            gfx.MeshPhongMaterial(color="#0F52BA")
+            earth_mat
         )
+        self.central_body.local.rotation = la.quat_from_euler((np.pi / 2, 0, 0), order="XYZ")
+
         self.canvas = RenderCanvas(size=(200, 200), title="TBD")
         self.renderer = gfx.renderers.WgpuRenderer(self.canvas)
         self.scene = gfx.Scene()
