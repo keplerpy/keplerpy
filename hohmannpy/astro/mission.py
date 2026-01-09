@@ -59,7 +59,7 @@ class Mission:
         """
 
         # TODO: Add an error here if simulate() has not yet been called.
-        engine = rendering.TempRenderEngine()
+        engine = rendering.RenderEngine()
         engine.draw_orbit(self.traj)
         engine.render()
 
