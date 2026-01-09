@@ -1,7 +1,7 @@
 from . import base
 import numpy as np
 import scipy as sp
-from . import logging
+from .. import logging
 
 
 class CowellPropagator(base.Propagator):

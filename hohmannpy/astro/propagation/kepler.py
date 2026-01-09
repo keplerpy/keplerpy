@@ -1,4 +1,5 @@
-from . import base, logging
+from .. import logging
+from . import base
 import numpy as np
 import scipy as sp
 

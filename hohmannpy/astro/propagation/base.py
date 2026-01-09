@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from .. import orbit, perturbations
-from . import logging
+from .. import orbit, perturbations, logging
 
 
 class Propagator(ABC):

@@ -4,14 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hohmannpy"
-version = "0.0.2
+version = "0.0.3
 description = "An open-source library designed for rapid spacecraft design and iteration."
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "scipy",
     "pygfx",
-    "pandas"
+    "pandas",
+    "imageio",
+    "pylinalg"
 ]
 
 [tool.setuptools.packages.find]

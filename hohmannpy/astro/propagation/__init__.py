@@ -1,9 +1,8 @@
 # Utility files.
-from . import base
-from . import logging
+from .base import Propagator
 
 # Propagators.
-from .kepler import KeplerPropagator
-from .universal_variable import UniversalVariablePropagator
 from .cowell import CowellPropagator
-# from .encke import EnckePropagator
+from .kepler import KeplerPropagator
+#from .encke import EnckePropagator
+from .universal_variable import UniversalVariablePropagator

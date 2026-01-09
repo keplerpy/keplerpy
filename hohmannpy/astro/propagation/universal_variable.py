@@ -2,7 +2,7 @@ from . import base
 import numpy as np
 from numpy.typing import NDArray
 import scipy as sp
-from . import logging
+from .. import logging
 
 
 class UniversalVariablePropagator(base.Propagator):

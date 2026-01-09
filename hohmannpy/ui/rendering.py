@@ -5,97 +5,8 @@ from numpy.typing import NDArray
 import importlib.resources
 import imageio.v3 as iio
 import pylinalg as la
+from . import camera
 
-
-# TODO: This function is very WIP. It currently needs the following:
-#   - Keyboard camera acceleration.
-#   - Need to clean up all of the variables, such as having camera radius be based on central body radius and have it
-#     be clamped between bounds.
-class OrbitalCamera(gfx.PerspectiveCamera):
-    def __init__(
-            self,
-            fov,
-            aspect,
-            radius,
-            radial_accel,
-            azimuth_accel,
-            elevation_accel,
-    ):
-        self._azimuth = 0
-        self._elevation = 0
-        self.radius = radius
-
-        self._azimuth_vel = 0
-        self._elevation_vel = 0
-        self._radial_vel = 0
-
-        self.radial_accel_rate = radial_accel
-        self.azimuth_accel_rate = azimuth_accel
-        self.elevation_accel_rate = elevation_accel
-        self.radial_accel = 0
-        self.azimuth_accel = 0
-        self.elevation_accel = 0
-
-        super().__init__(fov, aspect)
-
-    @property
-    def azimuth(self):
-        return self._azimuth
-    @azimuth.setter
-    def azimuth(self, value):
-        value = value
-        self._azimuth = value % 2 * np.pi
-
-    @property
-    def elevation(self):
-        return self._elevation
-    @elevation.setter
-    def elevation(self, value):
-        value = np.clip(value, -np.pi /2 + 1e-3, np.pi / 2 - 1e-3)
-        self._elevation = value
-
-    @property
-    def radial_vel(self):
-        return np.clip(self._radial_vel, -self.radial_accel_rate * 5, self.radial_accel_rate * 5)
-    @radial_vel.setter
-    def radial_vel(self, value):
-        self._radial_vel = value
-    @property
-    def azimuth_vel(self):
-        return np.clip(self._azimuth_vel, -self.azimuth_accel_rate * 5, self.azimuth_accel_rate * 5)
-    @azimuth_vel.setter
-    def azimuth_vel(self, value):
-        self._azimuth_vel = value
-    @property
-    def elevation_vel(self):
-        return np.clip(self._elevation_vel, -self.elevation_accel_rate * 5, self.elevation_accel_rate * 5)
-    @elevation_vel.setter
-    def elevation_vel(self, value):
-        self._elevation_vel = value
-
-    def orient(self):
-        x, y, z = self.local.position
-
-        radius = np.sqrt(x**2 + y**2 + z**2)
-        if radius != 0:  # Safeguard because camera is oriented before mouse position is set.
-            self.radius = radius
-            self.elevation = np.arcsin(z / self.radius)
-            self.azimuth = np.arctan2(y, x)
-
-        self.elevation_vel += self.elevation_accel
-        self.azimuth_vel += self.azimuth_accel
-        self.radial_vel += self.radial_accel
-
-        self.elevation += self.elevation_vel
-        self.azimuth += self.azimuth_vel
-        self.radius += self.radial_vel
-
-        x = self.radius * np.cos(self.elevation) * np.cos(self.azimuth)
-        y = self.radius * np.cos(self.elevation) * np.sin(self.azimuth)
-        z = self.radius * np.sin(self.elevation)
-
-        self.local.position = (x, y, z)
-        self.show_pos((0, 0, 0), up=(0, 0, 1))
 
 class RenderEngine:
     def __init__(self):
@@ -122,13 +33,20 @@ class RenderEngine:
         self.scene.add(y_axis)
         self.scene.add(z_axis)
 
-        self.camera = OrbitalCamera(
+        self.camera = camera.OrbitalCamera(
             fov=50,
             aspect=16/9,
-            radius=20000,
-            radial_accel=1000,
-            azimuth_accel=np.pi/24,
-            elevation_accel=np.pi/36,
+            initial_radius=20000,
+            min_radius=9000,
+            radial_accel=50000,
+            azimuth_accel=3 * np.pi / 2,
+            elevation_accel=3 * np.pi / 2,
+            radial_damping=100000,
+            azimuth_damping=4 * np.pi,
+            elevation_damping=4 * np.pi,
+            max_radial_vel=50000,
+            max_azimuth_vel=2 * np.pi,
+            max_elevation_vel=2 * np.pi,
         )
         gfx.OrbitController(self.camera, register_events=self.renderer)
 
@@ -148,21 +66,21 @@ class RenderEngine:
             key = event["key"].lower()
             match key:
                 case "w":  # Rotate up.
-                    self.camera.elevation_accel = self.camera.elevation_rate
+                    self.camera.elevation_dynamics_flag = 1
                 case "a":  # Rotate left.
-                    self.camera.azimuth_vel = -self.camera.azimuth_rate
+                    self.camera.azimuth_dynamics_flag = -1
                 case "s":  # Rotate down.
-                    self.camera.elevation_vel = -self.camera.elevation_rate
+                    self.camera.elevation_dynamics_flag = -1
                 case "d":  # Rotate right.
-                    self.camera.azimuth_vel = self.camera.azimuth_rate
+                    self.camera.azimuth_dynamics_flag = 1
                 case "q":  # Zoom out.
-                    self.camera.zoom_vel = self.camera.zoom_rate
+                    self.camera.radial_dynamics_flag = 1
                 case "e":  # Zoom in.
-                    self.camera.zoom_vel = -self.camera.zoom_rate
-        elif event["event_type"] == "key_up":
-            self.camera.elevation_vel = 0
-            self.camera.azimuth_vel = 0
-            self.camera.zoom_vel = 0
+                    self.camera.radial_dynamics_flag = -1
+        else:
+            self.camera.elevation_dynamics_flag = 0
+            self.camera.azimuth_dynamics_flag = 0
+            self.camera.radial_dynamics_flag = 0
 
     def draw_eath(self):
         pass
