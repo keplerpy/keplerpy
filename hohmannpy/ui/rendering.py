@@ -142,6 +142,7 @@ class RenderEngine:
         return earth
 
     def draw_skybox(self):
+        # Import all six skybox faces.
         with importlib.resources.files("hohmannpy.resources").joinpath("skybox/skybox_right1.png").open("rb") as f:
             skybox_right1_img = iio.imread(f)
         with importlib.resources.files("hohmannpy.resources").joinpath("skybox/skybox_left2.png").open("rb") as f:
@@ -155,11 +156,14 @@ class RenderEngine:
         with importlib.resources.files("hohmannpy.resources").joinpath("skybox/skybox_back6.png").open("rb") as f:
             skybox_back6_img = iio.imread(f)
 
+        # Stack the faces.
         skybox_img = np.stack(
             [skybox_right1_img, skybox_left2_img, skybox_top3_img,
              skybox_bottom4_img, skybox_front5_img, skybox_back6_img],
             axis=0
         )
+
+        # Create the skybox object.
         width = skybox_img.shape[1]
         height = skybox_img.shape[2]
         skybox = gfx.Background(
