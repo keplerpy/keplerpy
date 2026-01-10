@@ -1,10 +1,7 @@
+from __future__ import annotations
+from . import propagation
 from abc import ABC, abstractmethod
 import numpy as np
-
-# TYPE CHECKING ONLY IMPORTS.
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from . import base, kepler, universal_variable
 
 
 # TODO:
@@ -19,7 +16,7 @@ class Logger(ABC):
         pass
 
     @abstractmethod
-    def setup(self, propagator: "base.Propagator"):
+    def setup(self, propagator: propagation.base.Propagator):
         """
         Equivalent to an __init__() but the former is not used because we want to be able to pass a Logger into a
         Propagator during the latter's __init__(). All child classes must implement this method with the following
@@ -37,7 +34,7 @@ class Logger(ABC):
         pass
 
     @abstractmethod
-    def log(self, propagator: "base.Propagator", timestep: int):
+    def log(self, propagator: propagation.base.Propagator, timestep: int):
         """
         Fill in the Nth column of each history array with the orbit's current values for each data. The data is accessed
         by calling propagator.orbit.
@@ -59,7 +56,7 @@ class StateLogger(Logger):
         self.time_history = None
         super().__init__()
 
-    def setup(self, propagator: "base.Propagator"):
+    def setup(self, propagator: propagation.base.Propagator):
         self.position_history = np.zeros([3, propagator.timesteps + 1])
         self.velocity_history = np.zeros([3, propagator.timesteps + 1])
         self.time_history = np.zeros([1, propagator.timesteps + 1])
@@ -68,7 +65,7 @@ class StateLogger(Logger):
         self.velocity_history[:, 0] = propagator.orbit.velocity
         self.time_history[0, 0] = propagator.orbit.time
 
-    def log(self, propagator: "base.Propagator", timestep: int):
+    def log(self, propagator: propagation.base.Propagator, timestep: int):
         self.position_history[:, timestep] = propagator.orbit.position
         self.velocity_history[:, timestep] = propagator.orbit.velocity
         self.time_history[0, timestep] = propagator.orbit.time
@@ -95,7 +92,7 @@ class ElementsLogger(Logger):
         self.n_component2_history = None
         super().__init__()
 
-    def setup(self, propagator: "base.Propagator"):
+    def setup(self, propagator: propagation.base.Propagator):
         self.sm_axis_history = np.zeros([1, propagator.timesteps + 1])
         self.eccentricity_history = np.zeros([1, propagator.timesteps + 1])
         self.inclination_history = np.zeros([1, propagator.timesteps + 1])
@@ -127,7 +124,7 @@ class ElementsLogger(Logger):
             self.n_component1_history[0, 0] = propagator.orbit.n_component1
             self.n_component2_history[0, 0] = propagator.orbit.n_component2
 
-    def log(self, propagator: "base.Propagator", timestep: int):
+    def log(self, propagator: propagation.base.Propagator, timestep: int):
         self.sm_axis_history[0, timestep] = propagator.orbit.sm_axis
         self.eccentricity_history[0, timestep] = propagator.orbit.eccentricity
         self.inclination_history[0, timestep] = propagator.orbit.inclination
@@ -153,12 +150,12 @@ class EccentricAnomalyLogger(Logger):
         self.eccentric_anomaly_history = None
         super().__init__()
 
-    def setup(self, propagator: "kepler.KeplerPropagator"):
+    def setup(self, propagator: propagation.kepler.KeplerPropagator):
         self.eccentric_anomaly_history = np.zeros([1, propagator.timesteps + 1])
 
         self.eccentric_anomaly_history[0, 0] = propagator.eccentric_anomaly
 
-    def log(self, propagator: "kepler.KeplerPropagator", timestep: int):
+    def log(self, propagator: propagation.kepler.KeplerPropagator, timestep: int):
         self.eccentric_anomaly_history[0, timestep] = propagator.eccentric_anomaly
 
 
@@ -172,13 +169,13 @@ class UniversalVariableLogger(Logger):
         self.stumpff_param_history = None
         super().__init__()
 
-    def setup(self, propagator: "universal_variable.UniversalVariablePropagator"):
+    def setup(self, propagator: propagation.universal_variable.UniversalVariablePropagator):
         self.universal_variable_history = np.zeros([1, propagator.timesteps + 1])
         self.stumpff_param_history = np.zeros([1, propagator.timesteps + 1])
 
         self.universal_variable_history[0, 0] = propagator.universal_variable
         self.stumpff_param_history[0, 0] = propagator.stumpff_param
 
-    def log(self, propagator: "universal_variable.UniversalVariablePropagator", timestep: int):
+    def log(self, propagator: propagation.universal_variable.UniversalVariablePropagator, timestep: int):
         self.universal_variable_history[0, timestep] = propagator.universal_variable
         self.stumpff_param_history[0, timestep] = propagator.stumpff_param

@@ -1,4 +1,5 @@
-from . import propagation, orbit, perturbations, time
+from __future__ import annotations
+from . import propagation, orbit, perturbations, time, logging
 from ..ui import rendering
 import numpy as np
 import pandas as pd
@@ -49,7 +50,7 @@ class Mission:
 
         # TODO: Error handling for missing a state logger.
         for logger in self.propagator.loggers:
-            if isinstance(logger, propagation.logging.StateLogger):
+            if isinstance(logger, logging.StateLogger):
                 self.traj = logger.position_history
                 break
 
@@ -59,8 +60,10 @@ class Mission:
         """
 
         # TODO: Add an error here if simulate() has not yet been called.
-        engine = rendering.RenderEngine()
-        engine.draw_orbit(self.traj)
+        engine = rendering.RenderEngine(
+            traj=self.traj,
+            initial_global_time=self.initial_global_time,
+        )
         engine.render()
 
     def to_csv(self, file_path, fp_accuracy=6):

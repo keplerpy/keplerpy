@@ -1,38 +1,51 @@
-import pygfx as gfx
-from rendercanvas.auto import RenderCanvas, loop
+from __future__ import annotations
+import time
+
 import numpy as np
-from numpy.typing import NDArray
+import pygfx as gfx
+import rendercanvas.auto
 import importlib.resources
 import imageio.v3 as iio
 import pylinalg as la
+
 from . import camera
+from .. import astro
 
 
 class RenderEngine:
-    def __init__(self):
-        earth_mat = gfx.MeshPhongMaterial()
-        with importlib.resources.files("hohmannpy.resources").joinpath("earth_texture_map.jpg").open("rb") as f:
-            earth_img = iio.imread(f)
-            earth_img = np.ascontiguousarray(np.flipud(earth_img))
-        earth_mat.map = gfx.Texture(earth_img, dim=2)
+    def __init__(
+            self,
+            traj: np.ndarray,
+            initial_global_time: astro.Time,
+            draw_basis: bool = False,
+    ):
+        self.initial_global_time = initial_global_time
+        self.base_earth_rotation = None  # Set by draw_earth().
 
-        self.central_body = gfx.Mesh(
-            gfx.sphere_geometry(radius=6371, width_segments=64, height_segments=32),
-            earth_mat
-        )
-        self.central_body.local.rotation = la.quat_from_euler((np.pi / 2, 0, 0), order="XYZ")
-
-        self.canvas = RenderCanvas(size=(200, 200), title="TBD")
+        # Create application window.
+        self.canvas = rendercanvas.auto.RenderCanvas(size=(1280, 720), title="HohmannPy")
         self.renderer = gfx.renderers.WgpuRenderer(self.canvas)
-        self.scene = gfx.Scene()
-        self.scene.add(gfx.AmbientLight())
-        self.scene.add(gfx.DirectionalLight())
-        self.scene.add(self.central_body)
-        x_axis, y_axis, z_axis = self.draw_basis()
-        self.scene.add(x_axis)
-        self.scene.add(y_axis)
-        self.scene.add(z_axis)
 
+        # Add lighting and objects to application.
+        self.scene = gfx.Scene()
+        self.scene.add(gfx.AmbientLight(intensity=0.1))
+        sunlight = gfx.DirectionalLight(intensity=2)
+        sunlight.local.position = (100000, 0, 0)
+        self.scene.add(sunlight)
+
+        self.earth = self.draw_earth()
+        self.scene.add(self.earth)
+
+        self.orbit = self.draw_orbit(traj)
+        self.scene.add(self.orbit)
+
+        if draw_basis:
+            x_axis, y_axis, z_axis = self.draw_basis()
+            self.scene.add(x_axis)
+            self.scene.add(y_axis)
+            self.scene.add(z_axis)
+
+        # Create the camera.
         self.camera = camera.OrbitalCamera(
             fov=50,
             aspect=16/9,
@@ -48,8 +61,9 @@ class RenderEngine:
             max_azimuth_vel=2 * np.pi,
             max_elevation_vel=2 * np.pi,
         )
-        gfx.OrbitController(self.camera, register_events=self.renderer)
+        gfx.OrbitController(self.camera, register_events=self.renderer)  # Add mouse control.
 
+        # Add event dispatch functionality.
         self.canvas.add_event_handler(self.event_handler, "key_down", "key_up")
 
     def animate(self):
@@ -59,7 +73,7 @@ class RenderEngine:
 
     def render(self):
         self.canvas.request_draw(self.animate)
-        loop.run()
+        rendercanvas.auto.loop.run()
 
     def event_handler(self, event):
         if event["event_type"] == "key_down":
@@ -78,27 +92,58 @@ class RenderEngine:
                 case "e":  # Zoom in.
                     self.camera.radial_dynamics_flag = -1
         else:
-            self.camera.elevation_dynamics_flag = 0
-            self.camera.azimuth_dynamics_flag = 0
-            self.camera.radial_dynamics_flag = 0
+            if event["event_type"] == "key_up":
+                key = event["key"].lower()
+                match key:
+                    case "w":  # Rotate up.
+                        self.camera.elevation_dynamics_flag = 0
+                    case "a":  # Rotate left.
+                        self.camera.azimuth_dynamics_flag = 0
+                    case "s":  # Rotate down.
+                        self.camera.elevation_dynamics_flag = 0
+                    case "d":  # Rotate right.
+                        self.camera.azimuth_dynamics_flag = 0
+                    case "q":  # Zoom out.
+                        self.camera.radial_dynamics_flag = 0
+                    case "e":  # Zoom in.
+                        self.camera.radial_dynamics_flag = 0
 
-    def draw_eath(self):
-        pass
+    def draw_earth(self):
+        # Initialize the Earth texture.
+        earth_mat = gfx.MeshPhongMaterial(shininess=5)
+        with importlib.resources.files("hohmannpy.resources").joinpath("earth_texture_map.jpg").open("rb") as f:
+            earth_img = iio.imread(f)
+            earth_img = np.ascontiguousarray(np.flipud(earth_img))  # Need to flip array.
+        earth_mat.map = gfx.Texture(earth_img, dim=2)
+
+        # Create the Earth object using the texture.
+        earth = gfx.Mesh(
+            gfx.sphere_geometry(radius=6371, width_segments=64, height_segments=32),
+            earth_mat
+        )
+
+        self.base_earth_rotation = la.quat_from_euler(
+            (np.pi / 2, -self.initial_global_time.gmst, 0), order="XYZ"
+        ) # Rotate Earth since texture is 90 deg offset about x-axis, then offset terminator in new body frame.
+        earth.local.rotation = self.base_earth_rotation
+
+        return earth
 
     def draw_basis(self):
         length = 8000
+
         x_axis = gfx.Geometry(positions=np.array([[0, 0, 0], [length, 0, 0]], dtype=np.float32))
         y_axis = gfx.Geometry(positions=np.array([[0, 0, 0], [0, length, 0]], dtype=np.float32))
         z_axis = gfx.Geometry(positions=np.array([[0, 0, 0], [0, 0, length]], dtype=np.float32))
+
         x_material = gfx.LineMaterial(thickness=3, color=gfx.Color("#FF0000"))
         y_material = gfx.LineMaterial(thickness=3, color=gfx.Color("#00FF00"))
         z_material = gfx.LineMaterial(thickness=3, color=gfx.Color("#0000FF"))
 
         return gfx.Line(x_axis, x_material), gfx.Line(y_axis, y_material), gfx.Line(z_axis, z_material)
 
-    def draw_orbit(self, traj: NDArray[float]):
-        traj = traj.T / 1000
-        traj = traj.astype(np.float32)
-        self.scene.add(
-            gfx.Line(gfx.Geometry(positions=traj), gfx.LineMaterial(thickness=2, color=gfx.Color("#FF073A")))
-        )
+    def draw_orbit(self, traj: np.ndarray):
+        orbit = traj.T / 1000  # Scale to engine units (km).
+        orbit = orbit.astype(np.float32)  # Data type needed by gfx.Geometry.
+
+        return gfx.Line(gfx.Geometry(positions=orbit), gfx.LineMaterial(thickness=2, color=gfx.Color("#FF073A")))

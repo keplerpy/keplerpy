@@ -1,3 +1,4 @@
+from __future__ import annotations
 from .. import logging
 from . import base
 import numpy as np

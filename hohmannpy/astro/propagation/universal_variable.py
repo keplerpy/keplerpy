@@ -1,3 +1,4 @@
+from __future__ import annotations
 from . import base
 import numpy as np
 from numpy.typing import NDArray
