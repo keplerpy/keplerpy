@@ -191,3 +191,6 @@ class RenderEngine:
         orbit = orbit.astype(np.float32)  # Data type needed by gfx.Geometry.
 
         return gfx.Line(gfx.Geometry(positions=orbit), gfx.LineMaterial(thickness=2, color=gfx.Color("#FF073A")))
+
+    def draw_satellite(self):
+        pass
