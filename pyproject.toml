@@ -6,6 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "hohmannpy"
 version = "0.0.3
 description = "An open-source library designed for rapid spacecraft design and iteration."
+readme = "README.md"
+license = {text = "GPL-3.0"}
+authors = [ {name = "Nicholas Hirsch"}]
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
