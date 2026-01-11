@@ -1,5 +1,5 @@
 <div style="margin-bottom: 4px;">
-  <img src="logo_large.png" alt="HohmannPy logo" width="600">
+  <img src="full_logo.png" alt="full logo" width="600">
 </div>
 
 <div style="margin-top: 0;">
