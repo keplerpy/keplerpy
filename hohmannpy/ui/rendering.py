@@ -22,12 +22,11 @@ class RenderEngine:
     Creating a :mod:`pygfx` application involves several steps. First a :class:`pygfx.Scene`,
     :class:`rendercanvas.auto.RenderCanvas`, and :class:`pygfx.renderers.WgpuRenderer` must be created.
     :class:`pygfx.Scene` must then be populated with objects, light sources, and optionally a skybox. Then
-    :meth:`RenderEngine.event_handler()` must be added to the canvas. This will allow keyboard inputs to be processed
-    while the canvas is being rendered. :meth:`RenderEngine.render()` must be called to actually display the
-    application. Internally, this method calls :meth:`RenderEngine.animate()` which orients the camera and renders the
-    scene before recursively calling itself. However, these calls are all simply buffered until
-    :func:`rendercanvas.auto.loop.run()` is called which takes over control of the program and begins to process the
-    recursively buffered animation calls.
+    :meth:`event_handler()` must be added to the canvas. This will allow keyboard inputs to be processed while the
+    canvas is being rendered. :meth:`render()` must be called to actually display the application. Internally, this
+    method calls :meth:`animate()` which orients the camera and renders the scene before recursively calling itself.
+    However, these calls are all simply buffered until :func:`rendercanvas.auto.loop.run()` is called which takes over
+    control of the program and begins to process the recursively buffered animation calls.
 
     Parameters
     ----------
@@ -46,12 +45,11 @@ class RenderEngine:
     canvas: :class:`rendercanvas.auto.RenderCanvas`
         Surface onto which the scene is rendered.
     camera: :class:`ui.OrbitalCamera`
-        Movable camera that controls which part of :attr:`RenderEngine.scene` is currently rendered. Added to
-        :attr:`RenderEngine.scene` via instantiating :class:`pygfx.OrbitController` with it as a parameter. This also
-        adds mouse control functionality as the base camera class only allows for keyboard control in conjunction with
-        :meth:`RenderEngine.event_handler()`.
+        Movable camera that controls which part of :attr:`scene` is currently rendered. Added to :attr:`scene` via
+        instantiating :class:`pygfx.OrbitController` with it as a parameter. This also adds mouse control functionality
+        as the base camera class only allows for keyboard control in conjunction with :meth:`event_handler()`.
     renderer: :class:`pygfx.renderers.WgpuRenderer`
-        Draws the portion of the :attr:`RenderEngine.scene` currently visible through :attr:`RenderEngine.camera`.
+        Draws the portion of the :attr:`scene` currently visible through :attr:`camera`.
     earth: class:`pygfx.Mesh`
         Earth object used as the central body for displayed orbits. Since this class generates static scenes this Earth
         does not rotate.
@@ -119,6 +117,10 @@ class RenderEngine:
         self.canvas.add_event_handler(self.event_handler, "key_down", "key_up")
 
     def animate(self):
+        r"""
+        Function called to launch graphical application.
+        """
+
         self.camera.orient()
         self.renderer.render(self.scene, self.camera)
         self.canvas.request_draw(self.animate)
@@ -127,9 +129,9 @@ class RenderEngine:
         r"""
         Method called to launch the graphical application.
 
-        Buffers a single call to :meth:`RenderEngine.animate()` which
-        generates the application and scene and then recursively buffers infinite additional calls to itself. Then calls
-        :func:`rendercanvas.auto.loop.run()` which proceeds to process this buffer, acting as the frame update loop.
+        Buffers a single call to :meth:`animate()` which generates the application and scene and then recursively
+        buffers infinite additional calls to itself. Then calls :func:`rendercanvas.auto.loop.run()` which proceeds to
+        process this buffer, acting as the frame update loop.
         """
 
         self.canvas.request_draw(self.animate)
@@ -184,39 +186,6 @@ class RenderEngine:
     # --------------
     # OBJECT METHODS
     # --------------
-    def draw_earth(self):
-        r"""
-        Method which instantiates the Earth object.
-
-        Returns
-        -------
-        earth: :class:`pygfx.Mesh`
-            Earth object used as the central body for displayed orbits. Since this class generates static scenes this Earth
-            does not rotate.
-
-        Notes
-        -----
-        The Earth texture used was purchased from `JHT'S Planetary Pixel Emporium <https://planetpixelemporium.com/earth.html>`_.
-        """
-
-        # Initialize the Earth texture.
-        earth_mat = gfx.MeshPhongMaterial(shininess=5)
-        with importlib.resources.files("hohmannpy.resources").joinpath("earth_texture_map.jpg").open("rb") as f:
-            earth_img = iio.imread(f)
-            earth_img = np.ascontiguousarray(np.flipud(earth_img))  # Need to flip array.
-        earth_mat.map = gfx.Texture(earth_img, dim=2)
-
-        # Create the Earth object using the texture.
-        earth = gfx.Mesh(
-            gfx.sphere_geometry(radius=6371, width_segments=64, height_segments=32),
-            earth_mat
-        )
-        earth.local.rotation = la.quat_from_euler(
-            (np.pi / 2, 0, 0), order="XYZ"
-        ) # Rotate Earth since texture is 90 deg offset about x-axis, then offset terminator in new body frame.
-
-        return earth
-
     def draw_skybox(self):
         r"""
         Method which instantiates the skybox object.
@@ -261,6 +230,39 @@ class RenderEngine:
         )
 
         return skybox
+
+    def draw_earth(self):
+        r"""
+        Method which instantiates the Earth object.
+
+        Returns
+        -------
+        earth: :class:`pygfx.Mesh`
+            Earth object used as the central body for displayed orbits. Since this class generates static scenes this
+            Earth does not rotate.
+
+        Notes
+        -----
+        The Earth texture used was purchased from `JHT'S Planetary Pixel Emporium <https://planetpixelemporium.com/earth.html>`_.
+        """
+
+        # Initialize the Earth texture.
+        earth_mat = gfx.MeshPhongMaterial(shininess=5)
+        with importlib.resources.files("hohmannpy.resources").joinpath("earth_texture_map.jpg").open("rb") as f:
+            earth_img = iio.imread(f)
+            earth_img = np.ascontiguousarray(np.flipud(earth_img))  # Need to flip array.
+        earth_mat.map = gfx.Texture(earth_img, dim=2)
+
+        # Create the Earth object using the texture.
+        earth = gfx.Mesh(
+            gfx.sphere_geometry(radius=6371, width_segments=64, height_segments=32),
+            earth_mat
+        )
+        earth.local.rotation = la.quat_from_euler(
+            (np.pi / 2, 0, 0), order="XYZ"
+        ) # Rotate Earth since texture is 90 deg offset about x-axis, then offset terminator in new body frame.
+
+        return earth
 
     def draw_basis(self, length: float):
         r"""
@@ -309,6 +311,7 @@ class RenderEngine:
         return gfx.Line(gfx.Geometry(positions=orbit), gfx.LineMaterial(thickness=2, color=gfx.Color("#FF073A")))
 
 
+# TODO: Add a label to satellite that always points towards camera and tracks it.
 class DynamicRenderEngine(RenderEngine):
     def __init__(
             self,
@@ -329,6 +332,12 @@ class DynamicRenderEngine(RenderEngine):
         )  # Rotate Earth since texture is 90 deg offset about x-axis, then offset terminator in new body frame.
         self.earth.local.rotation = self.base_earth_rotation
 
+        # Add satellite.
+        self.orbit_points = traj / 1000
+        self.satellite = self.draw_satellite()
+        self.scene.add(self.satellite)
+        self.satellite.local.position = self.orbit_points[:, 0]
+
     def animate(self):
         earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in radians.
         self.camera.orient()
@@ -347,5 +356,10 @@ class DynamicRenderEngine(RenderEngine):
     # --------------
     # OBJECT METHODS
     # --------------
-    def draw_satellite(self, position):
-        pass
+    def draw_satellite(self):
+        sat_mat =  gfx.MeshPhongMaterial(color=gfx.Color("#FF073A"), flat_shading=True)
+        satellite = gfx.Mesh(
+            gfx.sphere_geometry(radius=200, width_segments=64, height_segments=32),
+            sat_mat
+        )
+        return satellite

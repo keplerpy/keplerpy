@@ -16,11 +16,11 @@ class OrbitalCamera(gfx.PerspectiveCamera):
     mouse-based control.
 
     To remedy this, this class may be used. It is a child class of :class:`pygfx.PerspectiveCamera` and unlike a typical
-    class from :mod:`pygfx.cameras` it implements its own movement dynamics via :meth:`ui.OrbitalCamera.orient()`
+    class from :mod:`pygfx.cameras` it implements its own movement dynamics via :meth:`orient()`
     without the need for a :mod:`pygfx.controller`. However, in-order for user movement commands to be processed this
     class must be used in conjunction with :class:`ui.RenderEngine` which is responsible for converting user input into
-    commands readable by :meth:`ui.OrbitalCamera.orient()`. The camera's equations of motion are displayed in the Notes
-    section of :meth:`ui.OrbitalCamera.orient()`.
+    commands readable by :meth:`orient()`. The camera's equations of motion are displayed in the Notes
+    section of :meth:`orient()`.
 
     An orbit camera uses spherical coordinates (azimuth, elevation, and radius) to position itself with respect to
     a fixed central point, in this case :math`[x, y, z] = [0, 0, 0]` in the :class:`ui.RenderEngine`'s Cartesian
@@ -92,7 +92,7 @@ class OrbitalCamera(gfx.PerspectiveCamera):
         Indicates current user elevation rotation command. 0 = no rotation, -1 = currently rotating up, 1 = currently
         rotating down.
     stored_time: float
-        Global timestamp at the last time :meth:`ui.OrbitalCamera.orient()` was called.
+        Global timestamp at the last time :meth:`orient()` was called.
     """
 
     def __init__(
@@ -152,7 +152,7 @@ class OrbitalCamera(gfx.PerspectiveCamera):
         The equations of motion for the camera are computed in spherical coordinates [1]_ in which co-elevation is
         replaced with elevation. The structure of the equations is the same for azimuth :math:`\theta`, elevation
         :math:`\phi`, and radius :math:`\rho` so just azimuth is shown below as an example. The exact equation used
-        depends on the current value of :attr:`ui.OrbitalCamera.azimuth_dynamics_flag` :math:`\text{FLAG}`.
+        depends on the current value of :attr:`azimuth_dynamics_flag` :math:`\text{FLAG}`.
 
         .. math::
 
@@ -168,10 +168,9 @@ class OrbitalCamera(gfx.PerspectiveCamera):
             \theta_{t+\Delta t} = \theta_{t}
                 \text{clip}(\dot{\theta}_{t+\Delta t}, -\dot{\theta}_\max, \dot{\theta}_\max) \Delta t
 
-        where :math:`\zeta_\theta`, :math:`\ddot{\theta}`, :math:`\dot{\theta}_\max` are
-        :attr:`ui.OrbitalCamera.azimuth_damping`, :attr:`ui.OrbitalCamera.azimuth_accel`, and
-        :attr:`ui.OrbitalCamera.max_azimuth_vel` respectively. These equations are discrete because their implementation
-        in :meth:`ui.OrbitalCamera.orient()` is not called continuously but rather every :math:`\Delta t` seconds.
+        where :math:`\zeta_\theta`, :math:`\ddot{\theta}`, :math:`\dot{\theta}_\max` are :attr:`azimuth_damping`,
+        :attr:`azimuth_accel`, and :attr:`max_azimuth_vel` respectively. These equations are discrete because their
+        implementation in :meth:`orient()` is not called continuously but rather every :math:`\Delta t` seconds.
 
         In addition, the following bounds are placed on the state variables:
 
@@ -185,8 +184,8 @@ class OrbitalCamera(gfx.PerspectiveCamera):
                   &\le \rho < \infty
             \end{aligned}
 
-        where :math:`\dot{\theta}_\min` is :attr:`ui.OrbitalCamera.min_radius` and :math:`\varepsilon = 1e^{-3}`. The
-        latter is used to avoid numerical singularities that would occur when :math:`\phi = -\pi/2, \, \pi / 2` exactly.
+        where :math:`\dot{\theta}_\min` is :attr:`min_radius`. :math:`\varepsilon = 1e^{-3}` is used to avoid numerical
+        singularities that would occur when :math:`\phi = -\pi/2, \, \pi / 2` exactly.
 
         References
         ----------
