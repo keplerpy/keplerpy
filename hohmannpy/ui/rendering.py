@@ -359,14 +359,14 @@ class DynamicRenderEngine(RenderEngine):
         Draws the portion of the :attr:`scene` currently visible through :attr:`camera`.
     earth: :class:`pygfx.Mesh`
         Earth object used as the central body for displayed orbits.
-    base_earth_rotation :class:`pylinalg.Quaternion`
+    base_earth_rotation: :class:`pylinalg.Quaternion`
         Quaternion representing the initial rotation of the earth at ``initial_global_time`` with respect to the mean
         Vernal equinox. The Vernal equinox points in the x-direction of the scene coordinates.
     satellite: :class:`pygfx.Mesh`
         Spherical object representing the satellite.
     orbit: :class:`pygfx.Line`
         Orbit object generated from the ``traj`` parameter.
-    orbit_spline :class:`scipy.BSpline`
+    orbit_spline: :class:`scipy.BSpline`
         Linear spline of the input trajectory ``traj``. Calling it via ``orbit_spline(time)`` returns the interpolated orbit
         at that time.
     initial_global_time: :class:`~hohmannpy.astro.Time`
