@@ -17,5 +17,5 @@ from .conversions import (
 from .mission import Mission
 from .orbit import Orbit
 from .time import Time
-from .perturbations import Perturbation, NonSphericalEarth
+from .perturbations import Perturbation, NonSphericalEarth, AtmosphericDrag
 from .logging import Logger, StateLogger, ElementsLogger, EccentricAnomalyLogger, UniversalVariableLogger
