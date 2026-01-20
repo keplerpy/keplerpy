@@ -1,14 +1,15 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 
-from . import propagation
+if TYPE_CHECKING:
+    from . import propagation
 
 
-# TODO:
-#  - Add labels to all these variables for when they are stored in a .csv.
-#  - Docstrings for the child classes.
+# TODO: This could be made much simpler using a metaclass.
 class Logger(ABC):
     r"""
     A logger is used to store data regarding an orbit generated on each timestep by :class:`~hohmannpy.astro.Propagator`
@@ -64,25 +65,43 @@ class Logger(ABC):
         ----------
         propagator : :class:`~hohmannpy.astro.Propagator`
             The propagator which passes in data for logging.
-        timestep: int
+        timestep : int
             How many timesteps propagation has occurred for. Used to row-index the history arrays.
         """
 
         pass
 
     @abstractmethod
-    def to_csv(self):
+    def to_csv(self, file_path: str, fp_accuracy: float):
         r"""
         Converts all the history arrays to a human-readable CSV file.
+
+        Parameters
+        ----------
+        file_path : str
+            Where to save CSV to.
+        fp_accuracy : float
+            How many digits after the decimal to save.
         """
 
         pass
 
 
 class StateLogger(Logger):
+    r"""
+    Child of :class:`~hohmannpy.astro.logging.Logger` that logs the time and Cartesian state (position and velocity) of
+    an orbit at N timesteps.
+
+    Attributes
+    ----------
+    position_history : np.ndarray
+        (3, N) array of the Cartesian positions in planet-centered inertial coordinates. Units: :math:`m`.
+    velocity_history : np.ndarray
+        (3, N) array of the Cartesian velocities in planet-centered inertial coordinates. Units: :math:`m/s`.
+    time_history : np.ndarray
+        (1, N) array of times with the mission start time set to 0. Units: :math:`s`.
     """
-    Logs the time and Cartesian state (position and velocity) of the orbit.
-    """
+
     def __init__(self):
         super().__init__()
 
@@ -91,9 +110,9 @@ class StateLogger(Logger):
         self.time_history = None
 
         self.labels = [
-            "Time (s)",
-            "x-Position (km)", "y-Position (km)", "z-Position (km)",
-            "x-Velocity (km/s)", "y-Velocity (km/s)", "z-Velocity (km/s)",
+            "Time [s]",
+            "x-Position [m]", "y-Position [m]", "z-Position [m]",
+            "x-Velocity [m/s]", "y-Velocity [m/s]", "z-Velocity [m/s]",
         ]
 
     def setup(self, propagator: propagation.base.Propagator):
@@ -110,17 +129,54 @@ class StateLogger(Logger):
         self.velocity_history[:, timestep] = propagator.orbit.velocity
         self.time_history[0, timestep] = propagator.orbit.time
 
-    def to_csv(self):
-        pass
+    def to_csv(self, file_path: str, fp_accuracy: float):
+        data = np.hstack((
+            self.position_history.T,
+            self.velocity_history.T,
+            self.time_history.T
+        ))
+        data_df = pd.DataFrame(data, columns=self.labels)
+        data_df.to_csv(
+            f"{file_path}.csv",
+            index=False,
+            float_format=f"%.{fp_accuracy}f"
+        )
 
 
-class ElementsLogger(Logger):
-    """
-    Logs the orbital elements of the orbit.
+class ClassicalElementsLogger(Logger):
+    r"""
+    Child of :class:`~hohmannpy.astro.logging.Logger` that logs the equinoctial orbital elements of an orbit at N
+    timesteps.
+
+    Attributes
+    ----------
+    sm_axis_history : np.ndarray
+        (1, N) array of the semi-major axis over time. Units: :math:`m`.
+    sl_rectum_history : np.ndarray
+        (1, N) array of the semi-latus rectum over time. Units: :math:`m`.
+    eccentricity_history : np.ndarray
+        (1, N) array of the eccentricity over time.
+    inclination_history : np.ndarray
+        (1, N) array of the inclination over time. Units: :math:`rad`.
+    raan_history : np.ndarray
+        (1, N) array of the RAAN over time. Units: :math:`rad`.
+    argp_history : np.ndarray
+        (1, N) array of the argument of periapsis over time. Units: :math:`rad`.
+    true_anomaly_history : np.ndarray
+        (1, N) array of the true anomaly over time. Units: :math:`rad`.
+    longp_history : np.ndarray
+        (1, N) array of the longitude of periapsis over time. Units: :math:`rad`.
+    argl_history : np.ndarray
+        (1, N) array of the argument of latitude over time. Units: :math:`rad`.
+    true_latitude_history : np.ndarray
+        (1, N) array of the true latitude over time. Units: :math:`rad`.
     """
 
     def __init__(self):
+        super().__init__()
+
         self.sm_axis_history = None
+        self.sl_rectum_history = None
         self.eccentricity_history = None
         self.inclination_history = None
         self.raan_history = None
@@ -129,14 +185,18 @@ class ElementsLogger(Logger):
         self.longp_history = None
         self.argl_history = None
         self.true_latitude_history = None
-        self.e_component1_history = None
-        self.e_component2_history = None
-        self.n_component1_history = None
-        self.n_component2_history = None
-        super().__init__()
+
+        self.labels = [
+            "Semi-Axis Axis [m]", "Semi-Latus Rectum [m]",
+            "Eccentricity",
+            "Inclination [rad]", "RAAN [rad]", "Argument of Periapsis [rad]",
+            "True Anomaly [rad]",
+            "Longitude of Periapsis [rad]", "Argument of Latitude [rad]", "True Latitude [rad]"
+        ]
 
     def setup(self, propagator: propagation.base.Propagator):
         self.sm_axis_history = np.zeros([1, propagator.timesteps + 1])
+        self.sl_rectum_history = np.zeros([1, propagator.timesteps + 1])
         self.eccentricity_history = np.zeros([1, propagator.timesteps + 1])
         self.inclination_history = np.zeros([1, propagator.timesteps + 1])
         self.raan_history = np.zeros([1, propagator.timesteps + 1])
@@ -147,6 +207,7 @@ class ElementsLogger(Logger):
         self.true_latitude_history = np.zeros([1, propagator.timesteps + 1])
 
         self.sm_axis_history[0, 0] = propagator.orbit.sm_axis
+        self.sl_rectum_history[0, 0] = propagator.orbit.sl_rectum
         self.eccentricity_history[0, 0] = propagator.orbit.eccentricity
         self.inclination_history[0, 0] = propagator.orbit.inclination
         self.raan_history[0, 0] = propagator.orbit.raan
@@ -156,19 +217,9 @@ class ElementsLogger(Logger):
         self.argl_history[0, 0] = propagator.orbit.argl
         self.true_latitude_history[0, 0] = propagator.orbit.true_latitude
 
-        if propagator.orbit.track_equinoctial:
-            self.e_component1_history = np.zeros([1, propagator.timesteps + 1])
-            self.e_component2_history = np.zeros([1, propagator.timesteps + 1])
-            self.n_component1_history = np.zeros([1, propagator.timesteps + 1])
-            self.n_component2_history = np.zeros([1, propagator.timesteps + 1])
-
-            self.e_component1_history[0, 0] = propagator.orbit.e_component1
-            self.e_component2_history[0, 0] = propagator.orbit.e_component2
-            self.n_component1_history[0, 0] = propagator.orbit.n_component1
-            self.n_component2_history[0, 0] = propagator.orbit.n_component2
-
     def log(self, propagator: propagation.base.Propagator, timestep: int):
         self.sm_axis_history[0, timestep] = propagator.orbit.sm_axis
+        self.sl_rectum_history[0, timestep] = propagator.orbit.sl_rectum
         self.eccentricity_history[0, timestep] = propagator.orbit.eccentricity
         self.inclination_history[0, timestep] = propagator.orbit.inclination
         self.raan_history[0, timestep] = propagator.orbit.raan
@@ -178,20 +229,107 @@ class ElementsLogger(Logger):
         self.argl_history[0, timestep] = propagator.orbit.argl
         self.true_latitude_history[0, timestep] = propagator.orbit.true_latitude
 
-        if propagator.orbit.track_equinoctial:
-            self.e_component1_history[0, timestep] = propagator.orbit.e_component1
-            self.e_component2_history[0, timestep] = propagator.orbit.e_component2
-            self.n_component1_history[0, timestep] = propagator.orbit.n_component1
-            self.n_component2_history[0, timestep] = propagator.orbit.n_component2
+    def to_csv(self, file_path: str, fp_accuracy: float):
+        data = np.hstack((
+            self.sm_axis_history.T,
+            self.sl_rectum_history.T,
+            self.eccentricity_history.T,
+            self.inclination_history.T,
+            self.raan_history.T,
+            self.argp_history.T,
+            self.true_anomaly_history.T,
+            self.longp_history.T,
+            self.argl_history.T,
+            self.true_latitude_history.T,
+        ))
 
-class EccentricAnomalyLogger(Logger):
+        data_df = pd.DataFrame(data, columns=self.labels)
+        data_df.to_csv(
+            f"{file_path}.csv",
+            index=False,
+            float_format=f"%.{fp_accuracy}f"
+        )
+
+
+class EquinoctialElementsLogger(Logger):
     """
-    Logs the eccentric anomaly of an orbit (for use with KeplerPropagator).
+    Child of :class:`~hohmannpy.astro.logging.Logger` that logs the equinoctial orbital elements of an orbit at N
+    timesteps.
+
+    Attributes
+    ----------
+    e_component1_history: np.ndarray
+        (1, N) array of the x-component of the projection of the eccentricity vector into the equinoctial frame.
+    e_component2_history: np.ndarray
+        (1, N) array of the y-component of the projection of the eccentricity vector into the equinoctial frame.
+    n_component1_history: np.ndarray
+        (1, N) array of the x-component of the projection of the nodal vector into the equinoctial frame.
+    n_component2_history: np.ndarray
+        (1, N) array of the y-component of the projection of the nodal vector into the equinoctial frame.
     """
 
     def __init__(self):
-        self.eccentric_anomaly_history = None
         super().__init__()
+
+        self.e_component1_history = None
+        self.e_component2_history = None
+        self.n_component1_history = None
+        self.n_component2_history = None
+
+        self.labels = [
+            "e-component 1", "e-component 2",
+            "n-component 2", "n-component 2",
+        ]
+
+    def setup(self, propagator: propagation.base.Propagator):
+        self.e_component1_history = np.zeros([1, propagator.timesteps + 1])
+        self.e_component2_history = np.zeros([1, propagator.timesteps + 1])
+        self.n_component1_history = np.zeros([1, propagator.timesteps + 1])
+        self.n_component2_history = np.zeros([1, propagator.timesteps + 1])
+
+        self.e_component1_history[0, 0] = propagator.orbit.e_component1
+        self.e_component2_history[0, 0] = propagator.orbit.e_component2
+        self.n_component1_history[0, 0] = propagator.orbit.n_component1
+        self.n_component2_history[0, 0] = propagator.orbit.n_component2
+
+    def log(self, propagator: propagation.base.Propagator, timestep: int):
+        self.e_component1_history[0, timestep] = propagator.orbit.e_component1
+        self.e_component2_history[0, timestep] = propagator.orbit.e_component2
+        self.n_component1_history[0, timestep] = propagator.orbit.n_component1
+        self.n_component2_history[0, timestep] = propagator.orbit.n_component2
+
+    def to_csv(self, file_path: str, fp_accuracy: float):
+        data = np.hstack((
+            self.e_component1_history.T,
+            self.e_component2_history.T,
+            self.n_component1_history.T,
+            self.n_component2_history.T,
+        ))
+
+        data_df = pd.DataFrame(data, columns=self.labels)
+        data_df.to_csv(
+            f"{file_path}.csv",
+            index=False,
+            float_format=f"%.{fp_accuracy}f"
+        )
+
+
+class EccentricAnomalyLogger(Logger):
+    r"""
+    Child of :class:`~hohmannpy.astro.logging.Logger` that logs the eccentric anomaly an orbit at N timesteps.
+
+    Attributes
+    ----------
+    eccentric_anomaly_history : np.ndarray
+        (1, N) array of the eccentric anomaly over time. Units: :math:`rad`.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+        self.eccentric_anomaly_history = None
+
+        self.labels = ["Eccentric Anomaly [rad]"]
 
     def setup(self, propagator: propagation.kepler.KeplerPropagator):
         self.eccentric_anomaly_history = np.zeros([1, propagator.timesteps + 1])
@@ -201,16 +339,39 @@ class EccentricAnomalyLogger(Logger):
     def log(self, propagator: propagation.kepler.KeplerPropagator, timestep: int):
         self.eccentric_anomaly_history[0, timestep] = propagator.eccentric_anomaly
 
+    def to_csv(self, file_path: str, fp_accuracy: float):
+        data = np.hstack((
+            self.eccentric_anomaly_history.T,
+        ))
+
+        data_df = pd.DataFrame(data, columns=self.labels)
+        data_df.to_csv(
+            f"{file_path}.csv",
+            index=False,
+            float_format=f"%.{fp_accuracy}f"
+        )
+
 
 class UniversalVariableLogger(Logger):
-    """
-    Logs the universal variable and Stumpff parameter (for use with UniversalVariablePropagator).
+    r"""
+    Child of :class:`~hohmannpy.astro.logging.Logger` that logs the universal variable and Stumpff parameter of an orbit
+    at N timesteps.
+
+    Attributes
+    ----------
+    universal_variable_history : np.ndarray
+        (1, N) array of the universal variable over time. Units: :math:`rad`.
+    stumpff_param_history : np.ndarray
+        (1, N) array of the Stumpff parameter over time. Units: :math:`\sqrt{rad}`.
     """
 
     def __init__(self):
+        super().__init__()
+
         self.universal_variable_history = None
         self.stumpff_param_history = None
-        super().__init__()
+
+        self.labels = ["Universal Variable [rad], Stumpff Parameter [sqrt(rad)]"]
 
     def setup(self, propagator: propagation.universal_variable.UniversalVariablePropagator):
         self.universal_variable_history = np.zeros([1, propagator.timesteps + 1])
@@ -222,3 +383,16 @@ class UniversalVariableLogger(Logger):
     def log(self, propagator: propagation.universal_variable.UniversalVariablePropagator, timestep: int):
         self.universal_variable_history[0, timestep] = propagator.universal_variable
         self.stumpff_param_history[0, timestep] = propagator.stumpff_param
+
+    def to_csv(self, file_path: str, fp_accuracy: float):
+        data = np.hstack((
+            self.universal_variable_history.T,
+            self.stumpff_param_history.T,
+        ))
+
+        data_df = pd.DataFrame(data, columns=self.labels)
+        data_df.to_csv(
+            f"{file_path}.csv",
+            index=False,
+            float_format=f"%.{fp_accuracy}f"
+        )

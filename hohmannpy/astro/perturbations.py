@@ -15,8 +15,10 @@ class Perturbation(ABC):
         pass
 
 
-# TODO: Fix issues with code where divisions by sine or cosine take place. This makes J2 computations invalid at certain
-#   inclinations.
+# TODO:
+#   - Fix issues with code where divisions by sine or cosine take place. This makes J2 computations invalid at certain
+#     inclinations.
+#   - Need to general lpmv array to generate it all at once.
 class NonSphericalEarth(Perturbation):
     def __init__(self, order: int, degree: int, gmst: float):
         self.order = order
@@ -176,7 +178,6 @@ class ThirdBodyGravity(Perturbation):
 
         self.grav_params = grav_params
         self.distances = distances
-
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
         pass

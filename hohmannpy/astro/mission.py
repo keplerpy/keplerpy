@@ -15,7 +15,6 @@ class Mission:
             propagator: propagation.base.Propagator = None,
             perturbations: list[perturbations.Perturbation] = None,
             display: str = "dynamic"
-
     ):
         # Instantiate all the passed-in attributes.
         self.starting_orbit = starting_orbit

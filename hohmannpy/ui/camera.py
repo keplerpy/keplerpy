@@ -23,7 +23,7 @@ class OrbitalCamera(gfx.PerspectiveCamera):
     section of ``orient()``.
 
     An orbit camera uses spherical coordinates (azimuth, elevation, and radius) to position itself with respect to
-    a fixed central point, in this case :math`[x, y, z] = [0, 0, 0]` in the :class:`~hohmannpy.ui.RenderEngine`'s Cartesian
+    a fixed central point, in this case :math:`[x, y, z] = [0, 0, 0]` in the render engine's Cartesian
     coordinates, which the camera always points directly towards. Changing each of these has the following effects:
 
     - **radius**: moves the camera towards or away from the sphere. Represents the magnitude of the position vector between the camera and :math:`[0, 0, 0]`.
