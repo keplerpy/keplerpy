@@ -49,7 +49,7 @@ class RenderEngine:
     camera: :class:`~hohmannpy.ui.OrbitalCamera`
         Movable camera that controls which part of :attr:`scene` is currently rendered. Added to scene via
         instantiating :class:`pygfx.OrbitController` with it as a parameter. This also adds mouse control functionality
-        as the base camera class only allows for keyboard control in conjunction with the ``event_handler()``.
+        as the base camera class only allows for keyboard control in conjunction with the event handler.
     renderer: :class:`pygfx.renderers.WgpuRenderer`
         Draws the portion of the scene currently visible through :attr:`camera`.
     earth: :class:`pygfx.Mesh`
@@ -275,7 +275,7 @@ class RenderEngine:
         Parameters
         ----------
         length: float
-            Length of the basis vectors in :math`km`.
+            Length of the basis vectors in :math:`km`.
 
         Returns
         -------
@@ -301,7 +301,7 @@ class RenderEngine:
         ----------
         traj: np.ndarray
             A (3, N) array of position vectors where N corresponds to the number of discrete timesteps propagated when
-            ``Mission` . ``simulate()`` is called. Positions should be in units of :math:`m`.
+            ``Mission`` . ``simulate()`` is called. Positions should be in units of :math:`m`.
 
         Returns
         -------
@@ -355,7 +355,7 @@ class DynamicRenderEngine(RenderEngine):
         camera class only allows for keyboard control in conjunction with the parent class'
         :meth:`event_handler()` method.
     renderer: :class:`pygfx.renderers.WgpuRenderer`
-        Draws the portion of the ``scene`` currently visible through :attr:`camera`.
+        Draws the portion of the scene currently visible through :attr:`camera`.
     earth: :class:`pygfx.Mesh`
         Earth object used as the central body for displayed orbits.
     base_earth_rotation: :class:`pylinalg.Quaternion`

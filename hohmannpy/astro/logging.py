@@ -8,13 +8,22 @@ from . import propagation
 
 # TODO:
 #  - Add labels to all these variables for when they are stored in a .csv.
+#  - Docstrings for the child classes.
 class Logger(ABC):
     r"""
-    Base class for all loggers.
+    A logger is used to store data regarding an orbit generated on each timestep by :class:`~hohmannpy.astro.Propagator`
+    . :meth:`~hohmannpy.astro.Propagator.propagate()`.
 
-    A :class:`~hohmannpy.astro.Logger` is used to store data regarding an orbit generated on each timestep by
-    :class:`~hohmannpy.astro.Propagator` . :meth:`~hohmannpy.astro.Propagator.propagate()`. One or more Loggers are
-    passed to a Propagator during startup and
+    This is done by inserting values into a set of ``np.ndarray``'s each of size (M, N) where M is the length of the
+    value being logged (if it's a vector) and N is the number of timesteps propagation, and hence logging, occurs for at
+    each timestep.
+
+    One or more loggers are passed to a propagator during startup. However, the ``__init__()`` for each logger is empty
+    as the necessary information (such as the initial value of each variable being logged on the first timestep) to
+    begin logging is not known until :class:`~hohmannpy.astro.Propagator` . :meth:`~hohmannpy.astro.Propagator.setup()`
+    is called. At this point the local :meth:`setup()` is also called to prepare the logger for logging. Then, as the
+    propagator steps through the propagation timesteps :meth:`log` is called on each of them to perform the array
+    indexing mentioned previously.
     """
 
     def __init__(self):
@@ -22,36 +31,51 @@ class Logger(ABC):
 
     @abstractmethod
     def setup(self, propagator: propagation.base.Propagator):
-        """
-        Equivalent to an __init__() but the former is not used because we want to be able to pass a Logger into a
-        Propagator during the latter's __init__(). All child classes must implement this method with the following
-        steps:
-            1) Allocate space using np.zeros() where the data is stored column-wise with N columns where N = the number
-               of timesteps stored in the Propagator's timestep attribute.
-            2) Fill in the 0th column of each array with the orbit's initial values for the stored data.
+        r"""
+        Sets up a propagator.
 
-        NOTE: Can't call this till after the initial values of Propagator-specific attributes, such as eccentric_anomaly
-        for KeplerPropagator, have been set. This is typically towards the start of a Propagator's propagate() method.
+        All child classes must implement this method with the following steps:
 
-        :param propagator: Propagator object which contains the Orbit object to receive data from.
+        1) Allocate space using :func:`numpy.zeros()` where the data is stored column-wise with N columns where N = the number of timesteps stored in the ``Propagator``'s ``timestep`` attribute.
+
+        2) Fill in the 0th column of each array with the orbit's initial values for the stored data.
+
+        Parameters
+        ----------
+        propagator : :class:`~hohmannpy.astro.Propagator`
+            The propagator which passes in data for logging.
+
+        Notes
+        -----
+        Can't call this till after the initial values of propagator-specific attributes, such as ``eccentric_anomaly``
+        for :class:`~hohmannpy.astro.KeplerPropagator`, have been set. This is typically towards the start of a
+        propagators' ``propagate()`` method.
         """
 
         pass
 
     @abstractmethod
     def log(self, propagator: propagation.base.Propagator, timestep: int):
-        """
-        Fill in the Nth column of each history array with the orbit's current values for each data. The data is accessed
-        by calling propagator.orbit.
+        r"""
+        Fills in the Nth column of each history array with the orbit's current values for each data. The data is
+        accessed from the propagator's ``orbit`` attribute which is itself an instance of :class:`~hohmannpy.astro.Orbit`.
 
-        :param propagator: Propagator object which contains the Orbit object to receive data from.
-        :param timestep: How many timesteps propagation has occurred for.
+        Parameters
+        ----------
+        propagator : :class:`~hohmannpy.astro.Propagator`
+            The propagator which passes in data for logging.
+        timestep: int
+            How many timesteps propagation has occurred for. Used to row-index the history arrays.
         """
 
         pass
 
     @abstractmethod
     def to_csv(self):
+        r"""
+        Converts all the history arrays to a human-readable CSV file.
+        """
+
         pass
 
 
