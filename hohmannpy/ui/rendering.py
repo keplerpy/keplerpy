@@ -22,7 +22,7 @@ class RenderEngine:
 
     Creating a :mod:`pygfx` application involves several steps. First a :class:`pygfx.Scene`,
     :class:`rendercanvas.auto.RenderCanvas`, and :class:`pygfx.renderers.WgpuRenderer` must be created.
-    :class:`pygfx.Scene` must then be populated with objects, light sources, and optionally a skybox. Then
+    The scene must then be populated with objects, light sources, and optionally a skybox. Then
     :meth:`event_handler()` must be added to the canvas. This will allow keyboard inputs to be processed while the
     canvas is being rendered. :meth:`render()` must be called to actually display the application. Internally, this
     method calls :meth:`animate()` which orients the camera and renders the scene before recursively calling itself.
@@ -47,11 +47,11 @@ class RenderEngine:
     canvas: :class:`rendercanvas.auto.RenderCanvas`
         Surface onto which the scene is rendered.
     camera: :class:`~hohmannpy.ui.OrbitalCamera`
-        Movable camera that controls which part of :attr:`scene` is currently rendered. Added to :attr:`scene` via
+        Movable camera that controls which part of :attr:`scene` is currently rendered. Added to scene via
         instantiating :class:`pygfx.OrbitController` with it as a parameter. This also adds mouse control functionality
-        as the base camera class only allows for keyboard control in conjunction with :meth:`event_handler()`.
+        as the base camera class only allows for keyboard control in conjunction with the ``event_handler()``.
     renderer: :class:`pygfx.renderers.WgpuRenderer`
-        Draws the portion of the :attr:`scene` currently visible through :attr:`camera`.
+        Draws the portion of the scene currently visible through :attr:`camera`.
     earth: :class:`pygfx.Mesh`
         Earth object used as the central body for displayed orbits. Since this class generates static scenes this Earth
         does not rotate.
@@ -131,7 +131,7 @@ class RenderEngine:
         r"""
         Method called to launch the graphical application.
 
-        Buffers a single call to :meth:`animate()` which generates the application and scene and then recursively
+        Buffers a single call to ``animate()`` which generates the application and scene and then recursively
         buffers infinite additional calls to itself. Then calls :func:`rendercanvas.auto.loop.run()` which proceeds to
         process this buffer, acting as the frame update loop.
         """
@@ -301,8 +301,7 @@ class RenderEngine:
         ----------
         traj: np.ndarray
             A (3, N) array of position vectors where N corresponds to the number of discrete timesteps propagated when
-            :class:`~hohmannpy.astro.Mission` . :meth:`~hohmannpy.astro.Mission.simulate()` is called. Positions should
-            be in units of :math:`m`.
+            ``Mission` . ``simulate()`` is called. Positions should be in units of :math:`m`.
 
         Returns
         -------
@@ -335,7 +334,7 @@ class DynamicRenderEngine(RenderEngine):
         :class:`~hohmannpy.astro.Mission` . :meth:`~hohmannpy.astro.Mission.simulate()` is called. Positions should be
         in units of :math:`m`.
     times: np.ndarray
-        A (1, N) array of times corresponding to the positions in `traj`. These are local times with :math:`t=0` marking
+        A (1, N) array of times corresponding to the positions in ``traj``. These are local times with :math:`t=0` marking
         the start of propagation.
     initial_global_time: :class:`~hohmannpy.astro.Time`
         The initial UT1 time at which the mission began.
@@ -351,12 +350,12 @@ class DynamicRenderEngine(RenderEngine):
     canvas: :class:`rendercanvas.auto.RenderCanvas`
         Surface onto which the scene is rendered.
     camera: :class:`~hohmannpy.ui.OrbitalCamera`
-        Movable camera that controls which part of :attr:`scene` is currently rendered. Added to :attr:`scene` via
+        Movable camera that controls which part of :attr:`scene` is currently rendered. Added to ``scene`` via
         instantiating an orbit controller with it as a parameter. This also adds mouse control functionality as the base
         camera class only allows for keyboard control in conjunction with the parent class'
         :meth:`event_handler()` method.
     renderer: :class:`pygfx.renderers.WgpuRenderer`
-        Draws the portion of the :attr:`scene` currently visible through :attr:`camera`.
+        Draws the portion of the ``scene`` currently visible through :attr:`camera`.
     earth: :class:`pygfx.Mesh`
         Earth object used as the central body for displayed orbits.
     base_earth_rotation: :class:`pylinalg.Quaternion`
@@ -381,10 +380,10 @@ class DynamicRenderEngine(RenderEngine):
     final_sim_time: float
         The last timestep propagator for the mission. After this is reached the sim resets.
     speed_factor: float
-        How much fast :attr:`sim_time` is compared to :attr:`local_time`.
+        How much fast :attr:`sim_time` is compared to ``local_time``.
     old_speed_factor: float
         The :attr:`speed_factor` before pausing is saved so that when the sim is unpaused the sim returns to the
-        pre-pause :attr:`speed_factor`.
+        pre-pause ``speed_factor``.
 
     See Also
     --------
@@ -430,7 +429,7 @@ class DynamicRenderEngine(RenderEngine):
     def animate(self):
         r"""
         See :class:`~hohmannpy.ui.RenderEngine` . :meth:`~hohmannpy.ui.RenderEngine.animate()`. This simply adds in
-        :attr:`sim_time` marching as well as rotating the Earth and moving the satellite.
+        ``sim_time`` marching as well as rotating the Earth and moving the satellite.
         """
 
         earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in rad/s.

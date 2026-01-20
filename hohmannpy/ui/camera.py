@@ -15,12 +15,12 @@ class OrbitalCamera(gfx.PerspectiveCamera):
     :class:`pygfx.PerspectiveCamera` may be passed into :class:`pygfx.OrbitController`. However, this only implements
     mouse-based control.
 
-    To remedy this, this class may be used. It is a child class of :class:`pygfx.PerspectiveCamera` and unlike a typical
-    class from :mod:`pygfx.cameras` it implements its own movement dynamics via :meth:`orient()`
-    without the need for a :mod:`pygfx.controller`. However, in-order for user movement commands to be processed this
-    class must be used in conjunction with :class:`~hohmannpy.ui.RenderEngine` which is responsible for converting user input into
-    commands readable by :meth:`orient()`. The camera's equations of motion are displayed in the Notes
-    section of :meth:`orient()`.
+    To remedy this, this class may be used. It is a child class of ``pygfx.PerspectiveCamera`` and unlike a typical
+    class from ``pygfx.cameras`` it implements its own movement dynamics via :meth:`orient()`
+    without the need for a ``pygfx.controller``. However, in-order for user movement commands to be processed this
+    class must be used in conjunction with :class:`~hohmannpy.ui.RenderEngine` which is responsible for converting user
+    input into commands readable by ``orient()``. The camera's equations of motion are displayed in the Notes
+    section of ``orient()``.
 
     An orbit camera uses spherical coordinates (azimuth, elevation, and radius) to position itself with respect to
     a fixed central point, in this case :math`[x, y, z] = [0, 0, 0]` in the :class:`~hohmannpy.ui.RenderEngine`'s Cartesian
@@ -143,7 +143,7 @@ class OrbitalCamera(gfx.PerspectiveCamera):
         r"""
         Implements the equations of motion for the camera.
 
-        Takes in the current camera position in the frame of :class:`~hohmannpy.ui.RenderEngine` as Cartesian coordinates and
+        Takes in the current camera position in the frame of ``RenderEngine`` as Cartesian coordinates and
         converts these to spherical coordinates. These coordinates are then adjusted based on user input before being
         clamped and converted back to a new set of Carterian which is used to update the camera's position.
 

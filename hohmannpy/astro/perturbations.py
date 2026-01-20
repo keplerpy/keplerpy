@@ -87,6 +87,7 @@ class NonSphericalEarth(Perturbation):
         return colatitude, longitude
 
 
+# TODO: Deal with the singularity at the poles.
 class AtmosphericDrag(Perturbation):
     def __init__(
             self,
@@ -167,3 +168,15 @@ class AtmosphericDrag(Perturbation):
         altitude = np.sqrt(position[0] ** 2 + position[1] ** 2) / np.cos(geodetic_latitude) - radius_of_curvature
 
         return altitude
+
+
+class ThirdBodyGravity(Perturbation):
+    def __init__(self, grav_params: list[float], distances: list[float]):
+        super().__init__()
+
+        self.grav_params = grav_params
+        self.distances = distances
+
+
+    def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+        pass

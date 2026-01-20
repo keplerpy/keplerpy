@@ -1,15 +1,20 @@
 from __future__ import annotations
-from . import propagation
 from abc import ABC, abstractmethod
+
 import numpy as np
+
+from . import propagation
 
 
 # TODO:
 #  - Add labels to all these variables for when they are stored in a .csv.
 class Logger(ABC):
-    """
-    Base class for all loggers. A Logger is meant to be instantiated in the setup() method of a Propagator and is called
-    every iteration of a Propagator's propagate() loop to store data regarding the orbit being propagated.
+    r"""
+    Base class for all loggers.
+
+    A :class:`~hohmannpy.astro.Logger` is used to store data regarding an orbit generated on each timestep by
+    :class:`~hohmannpy.astro.Propagator` . :meth:`~hohmannpy.astro.Propagator.propagate()`. One or more Loggers are
+    passed to a Propagator during startup and
     """
 
     def __init__(self):
@@ -45,16 +50,27 @@ class Logger(ABC):
 
         pass
 
+    @abstractmethod
+    def to_csv(self):
+        pass
+
 
 class StateLogger(Logger):
     """
     Logs the time and Cartesian state (position and velocity) of the orbit.
     """
     def __init__(self):
+        super().__init__()
+
         self.position_history = None
         self.velocity_history = None
         self.time_history = None
-        super().__init__()
+
+        self.labels = [
+            "Time (s)",
+            "x-Position (km)", "y-Position (km)", "z-Position (km)",
+            "x-Velocity (km/s)", "y-Velocity (km/s)", "z-Velocity (km/s)",
+        ]
 
     def setup(self, propagator: propagation.base.Propagator):
         self.position_history = np.zeros([3, propagator.timesteps + 1])
@@ -69,6 +85,9 @@ class StateLogger(Logger):
         self.position_history[:, timestep] = propagator.orbit.position
         self.velocity_history[:, timestep] = propagator.orbit.velocity
         self.time_history[0, timestep] = propagator.orbit.time
+
+    def to_csv(self):
+        pass
 
 
 class ElementsLogger(Logger):
