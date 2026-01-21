@@ -1,70 +1,120 @@
 from __future__ import annotations
 
 import numpy as np
-from numpy.typing import NDArray
-from . import propagation, conversions
 import scipy as sp
+
+from . import propagation, conversions
 
 
 class Orbit:
-    """
-    Class which holds current Cartesian state of the orbit as attributes. Also includes functions to convert between
-    orbital elements and a Cartesian state.
+    r"""
+    Class which contains all the information needed to define an orbit. This includes a variety of orbit determination
+    schemes (from state, from orbital elements, Gibb's method, etc;) as well as functions to update all the parameters
+    which define an orbit.
 
-    NOTE: Orbital elements are computed once upon instantiation. Recomputing them during propagation can cause them to
-    drift so avoid calling them compute_xxx() functions if possible.
+    The basic ``__init__()`` creates a :class:`~hohmannpy.astro.Orbit` from a Cartesian state. As an alternative to this,
+    a variety of alternative instantiations decorated using ``@classmethod`` are available for alternative forms of orbit
+    determination. Internally, these all use the input parameters to generate the Cartesian state which is then used to
+    call the base ``__init__()``.
 
-    [BASE PARAMETERS]
-    :ivar position: A (3, ) vector of the satellite's inertial position.
-    :ivar velocity: A (3, ) vector of the satellite's inertial velocity.
-    :ivar time: Current time.
-    :ivar grav_param: Constant related to the gravitational field strength of the central body.
+    The Cartesian state, as well as orbital elements (including the classical and equinoctial ones), are all stored as
+    attributes of this class. The Cartesian state acts as the source of truth for the orbit and is always kept up to
+    date. The other attributes are not updated automatically from said state when they are accessed (such as by using
+    the ``@property`` decorator). The rationale for this is that when determining an orbit from say classical elements,
+    if these elements were then passed into a Keplerian solver it would be expected that they would not change. However,
+    if the elements were constantly recomputed from the Cartesian state it would introduce floating-point errors that
+    could accumulate over time. Instead, manual update methods of the form ``update_element()`` must be called to force
+    a recomputation. These should be used with caution, and ideally only :meth:`~hohmannpy.astro.Orbit.update_classical()`
+    and :meth:`~hohmannpy.astro.Orbit.update_equinoctial()` should be called externally.
 
-    [CLASSICAL ORBITAL ELEMENTS]
-    :ivar sm_axis: 1/2 length of the orbit's major axis.
-    :ivar eccentricity: How elliptical orbit is.
-    :ivar raan: (Longitude of the right ascending node) Angle between ecliptic 1-axis and nodal vector.
-    :ivar argp: (Argument of periapsis) Angle between nodal and eccentricity vectors in the orbital plane.
-    :ivar inclination: Angle between orbital and ecliptic planes.
-    :ivar true_anomaly: Current location of satellite along the orbit.
+    Parameters
+    ----------
+    position : np.ndarray
+        A (3, ) vector of the satellite's planet-centered inertial position.
+    velocity : np.ndarray
+        A (3, ) vector of the satellite's velocity.
+    grav_param : float
+        Constant related to the gravitational field strength of the central body. Defaults to that of the Earth.
+    track_equinoctial : bool
+        Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
+        classical orbital elements (as well as their degenerate cases) are tracked.
+    _default : bool
+        "Private" internal flag which indicates whether to compute perform an initial call to ``update_classical()``
+        (and possibly ``update_equinoctial``) after instantiation. This is assigned ``True`` for instantiations which
+        involve the Cartesian state and ``False`` otherwise to avoid the floating-point errors discussed in the class
+        description.
 
-    [MODIFIED EQUINOCTIAL ORBITAL ELEMENTS]
-    :ivar sl_rectum: 1/2 the length of the orbit's latus-rectum.
-    :ivar e_component1:
-    :ivar e_component2:
-    :ivar n_component1:
-    :ivar n_component2:
-    :ivar true_latitude: (True longitude) Angle between the ecliptic 1-axis and positon vector.
+    Attributes
+    ----------
+    position : np.ndarray
+        A (3, ) vector of the satellite's planet-centered inertial position.
+    velocity : np.ndarray
+        A (3, ) vector of the satellite's velocity.
+    spf_angular_momentum : np.ndarray
+        A (3, ) vector of the satellite's specific angular momentum.
+    eccentricity_vec : np.ndarray
+        A (3, ) vector whose magnitude is the eccentricity of the orbit and that points towards the orbit's periapsis.
+    nodal_vec : np.ndarray
+        A (3, ) vector which points along the line of intersection between the orbital and ecliptic (PCI 1-2) planes
+        towards the right ascending node.
+    time : float
+        Current simulation time. This starts at 0 when propagation begins and is not equivalent to the actual time in
+        for example UT1 and Gregorian date.
+    grav_param : float
+        Constant related to the gravitational field strength of the central body. Defaults to that of the Earth.
+    sm_axis : float
+        :math:`1/2` the length of the orbit's major axis.
+    sl_rectum : float
+        :math`1/2` the length of the orbit's latus rectum (line perpendicular to the major axis whose midpoint is the
+        primary foci of the orbit.
+    eccentricity : float
+        How elliptical the orbit is (<1 = ellipse, >1 = hyperbola).
+    raan : float
+        (Longitude of the right ascending node) Angle between the PCI 1-axis (approximately the Vernal equinox) and the
+        nodal vector.
+    argp : float
+        (Argument of periapsis) Angle between nodal and eccentricity vectors in the orbital plane.
+    inclination : float
+        Angle between the orbital and ecliptic (PCI 1-2) planes. Equivalently the angle between the eccentricity and
+        specific angular momentum vectors.
+    true_anomaly : float
+        Angle between the eccentricity and position vector, "fast variable" used to track the satellite's current
+        location.
+    longp : float
+        (Longitude of periapsis) Sum of the RAAN and argument of periapsis, only well-defined when the inclination is
+        zero.
+    argl : float
+        (Argument of latitude) Sum of the argument of periapsis and true anomaly, only well-defined when the orbit is
+        circular and used in place of the true anomaly to track the satellite.
+    true_latitude : float
+        Sum of the RAAN, argument of periapsis, and true anomaly, only well-defined when the inclination is zero and the
+        orbit is circular and used in place of the true anomaly to track the satellite.
+    e_component1 : float
+        1-component of the project of the eccentricity vector into the equinoctial plane.
+    e_component2 : float
+        2-component of the project of the eccentricity vector into the equinoctial plane.
+    n_component1 : float
+        1-component of the project of the nodal vector into the equinoctial plane.
+    n_component2 : float
+        2-component of the project of the eccentricity vector into the equinoctial plane.
+    track_equinoctial : bool
+        Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
+        classical orbital elements (as well as their degenerate cases) are tracked.
 
-    [OTHER ORBITAL PARAMETER]
-    :ivar longp: (Longitude of periapsis) Angle between the ecliptic 1-axis and eccentricity vector.
-    :ivar argl: (Argument of latitude) Angle between the line of nodes and position vector.
-    :ivar spf_angular_momentum: Angular momentum per unit mass of the orbit, a (3, ) vector.
-    :ivar eccentricity_vec: The direction of periapsis wrt. the central body, a (3, ) vector.
-    :ivar nodal_vec: The direction of the right ascending node wrt. the central body, a (3, ) vector. This lies along
-        the line of nodes which marks the intersection between the orbital and ecliptic planes.
-
-    [BOOKKEEPING]
-    :ivar track_equinoctial: Whether to record and update the equinoctial orbital elements in addition to the classical
-        orbital elements.
+    Notes
+    -----
+    All vector quantities are given in planet-centered inertial (PCI) coordinates.
     """
 
     def __init__(
             self,
-            position: NDArray[float],
-            velocity: NDArray[float],
+            position: np.ndarray,
+            velocity: np.ndarray,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
             *,  # Hides parameters beneath this from the user.
             _default: bool = True,
     ):
-        """
-        NOTE: A "hidden" variable, _default, is passed to this function. This denotes whether a state-based
-        parameterization method was used to construct the orbit. If another method such as some type of orbital elements
-        was used instead the call to the update_all() method is skipped as this would lead to immediately recomputing
-        parameters the user just passed in.
-        """
-
         self.position = position
         self.velocity = velocity
         self.time = 0
@@ -83,13 +133,13 @@ class Orbit:
     @classmethod
     def from_state(
             cls,
-            position: NDArray[float],
-            velocity: NDArray[float],
-            grav_param=3.986004418e14,  # Default to Earth in units of m^3/s^2.
+            position: np.ndarray,
+            velocity: np.ndarray,
+            grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
-    ) -> "Orbit":
-        """
-        Identical to the __init__() function. Returns an Orbit object based on the position and velocity.
+    ) -> Orbit:
+        r"""
+        Identical to ``__init__()``. Returns an ``Orbit`` based on the Cartesian position and velocity.
         """
 
         return cls(position, velocity, grav_param, track_equinoctial)
@@ -105,10 +155,12 @@ class Orbit:
             true_anomaly: float,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
-    ) -> "Orbit":
-        """
-        Alternative constructor which takes in the classical orbital elements and calls elements_2_state() to convert
-        to position and velocity and from there generate an Orbit object.
+    ) -> Orbit:
+        r"""
+        Alternative constructor which performs orbit determination using the classical orbital elements.
+
+        It takes in the classical orbital elements and calls :func:`~hohmannpy.astro.elements_2_state()` to convert the
+        Cartesian position and velocity and from there generate the orbit.
         """
 
         position, velocity = conversions.classical_2_state(
@@ -152,10 +204,10 @@ class Orbit:
         true_anomaly: float,
         grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
         track_equinoctial: bool = False,
-    ) -> "Orbit":
-        """
-        Same as from_classical_elements() but explicitly for parabolic orbits where semi-major axis is not defined and
-        semi-latus rectum is used instead.
+    ) -> Orbit:
+        r"""
+        Same as :meth:`from_classical_elements()` but explicitly for parabolic orbits where semi-major axis is not
+        defined and the semi-latus rectum is used instead.
         """
 
         position, velocity = conversions.classic_elements_2_state_p(
@@ -199,9 +251,10 @@ class Orbit:
             true_latitude: float,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = True,
-    ) -> "Orbit":
-        """
-        Modified equinoctial version of from_classical_elements().
+    ) -> Orbit:
+        r"""
+        Similar to ``from_classical_elements()`` but using the modified equinoctial elements instead of the classical
+        ones.
         """
 
         position, velocity = conversions.equinoctial_2_state(
@@ -239,30 +292,39 @@ class Orbit:
     @classmethod
     def from_gibbs(
             cls,
-            position1: NDArray[float],
-            position2: NDArray[float],
-            position3: NDArray[float],
+            position1: np.ndarray,
+            position2: np.ndarray,
+            position3: np.ndarray,
             current_position_index: int = 2,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
-    ) -> "Orbit":
-        """
+    ) -> Orbit:
+        r"""
         Alternative constructor which returns the position and velocity given three co-planar position vectors. The
         process of determining the conic whose origin lies at the center of three co-planar vectors is known as Gibbs'
         method.
 
-        NOTE: The three positon vectors must be ordered from earliest the latest in time when they are passed as
-        arguments in order for Gibbs' method to encode retrograde/prograde correctly.
+        Parameters
+        ----------
+        position1 : np.ndarray
+            A (3, ) vector of the satellite's planet-centered inertial position at the earliest time sighting.
+        position2 : np.ndarray
+            A (3, ) vector of the satellite's planet-centered inertial position at the middle time sighting.
+        position3 : np.ndarray
+            A (3, ) vector of the satellite's planet-centered inertial position at the latest time sighting.
+        current_position_index: int
+            Which position vector the satellite currently is located at.
+        grav_param: float
+            Constant related to the gravitational field strength of the central body. Defaults to that of the Earth.
+        track_equinoctial : bool
+            Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
+            classical orbital elements (as well as their degenerate cases) are tracked.
 
-        [GIBBS METHOD PARAMETERS]
-        :param position1:
-        :param position2:
-        :param position3:
-        :param current_position_index: Which position vector the satellite currently is located at.
-
-        [OTHER PARAMETERS]
-        :param grav_param:
-        :param track_equinoctial:
+        Notes
+        -----
+        The three positon vectors must be ordered from earliest the latest in time when they are passed as arguments in
+        order for Gibbs' method to encode retrograde/prograde correctly. They should also have true anomaly spacings of
+        approximately ~5 :math:`deg` in order to ensure the resultant velocities are not ill-conditioned.
         """
 
         # Form the three vectors used in Gibbs' method. The first two correspond to sl_rectum = vec1 / vec2, and the
@@ -299,8 +361,8 @@ class Orbit:
     @classmethod
     def from_lambert(
             cls,
-            position1: NDArray[float],
-            position2: NDArray[float],
+            position1: np.ndarray,
+            position2: np.ndarray,
             tof: float,
             grav_param: float = 3.986004418e14,  # Default to Earth in units of m^3/s^2.
             track_equinoctial: bool = False,
@@ -308,41 +370,53 @@ class Orbit:
             short_transfer: bool = True,
             prograde: bool = True,
             fg_constraint: bool = True,
-            solver_tol=1e-8,
-            stumpff_tol=1e-8,
-            stumpff_series_length=10,
-    ) -> "Orbit":
+            solver_tol: float = 1e-8,
+            stumpff_tol: float = 1e-8,
+            stumpff_series_length: int = 10,
+    ) -> Orbit:
         """
         A universal variable implementation of Gauss' method to solving Lambert's problem. Lambert's problem involves
         finding the orbit which corresponds to two position vectors and the time-of-flight between them (whether that
-        involved traveling the long or short route between them must be specified by the user).
-            To do this, the f and g functions and their derivatives are treated as three equations used to solve for
-        three unknowns, in this case the Stumpff parameter, universal variable, and a third term termed here as the
+        involves traveling the long or short route between them must be specified by the user).
+
+        To do this, the f and g functions and their derivatives are treated as three equations used to solve for
+        three unknowns, in this case the Stumpff parameter, universal variable, and a third term known as the
         Lambert parameter. These roughly translate to the change in eccentric anomaly, semi-major axis, and semi-latus
         rectum. Since these equations are transcendental in the Stumpff parameter, a root-finding method is used to
         solve them in which a value for the Stumpff parameter is guessed, all three equations are solved and then
-        these are plugged into Kepler's equation where time is set equal to the time-of-flight.
-            Once the correct value of the parameter is found, the f and g functions are constructed and used to solve
-        for the velocity at both points.
+        these are plugged into Kepler's equation where time is set equal to the time-of-flight. Once the correct value
+        of the parameter is found, the f and g functions are constructed and used to solve for the velocity at both
+        points.
 
-        [LAMBERT PROBLEM PARAMETERS]
-        :param position1:
-        :param position2:
-        :param tof: Time-of-flight between the two positions.
-        :param current_position_index: Which position vector the satellite currently is located at.
-        :param short_transfer: Whether the satellite took the long or short arc between the two positions
-        :param prograde: Whether satellite is in prograde, determines the sign on Lambert's constant.
-        :param fg_constraint: Whether to compute the gdot-series independently (increasing computation time) or to
-            instead use the series constraint (faster but less accurate).
-        :param solver_tol: Tolerance to use when solving Kepler's equation.
-        :param stumpff_tol: Minimum absolute value of the Stumpff parameter before switching to the infinite series
-            definition of the Stumpff series.
-        :param stumpff_series_length: How many terms to evaluate in the Stumpff series when using their infinite series
-            definitions.
-
-        [OTHER PARAMETERS]
-        :param grav_param:
-        :param track_equinoctial:
+        position1 : np.ndarray
+            A (3, ) vector of the satellite's planet-centered inertial position at one of the two sightings.
+        position2 : np.ndarray
+            A (3, ) vector of the satellite's planet-centered inertial position at one of the two sightings.
+        tof : float
+            Time-of-flight between the two positions.
+        current_position_index : int
+            Which position vector the satellite currently is located at. Should be either 1 or 2.
+        short_transfer : bool
+            Flag which indicates the satellite took the long or short arc between the two positions. Set to true for a
+            short transfer arc and false for a long arc transfer.
+        prograde : bool
+            Flag which indicates whether satellite is in a prograde orbit, determines the sign on Lambert's constant.
+            True for prograde orbits and false for retrograde ones.
+        fg_constraint : bool
+            Flag indicating whether to compute the gdot-series independently (increasing computation time) or to
+            instead use the series constraint.
+        solver_tol : float
+            Tolerance to use when solving Kepler's equation.
+        stumpff_tol : float
+            Minimum absolute value of the Stumpff parameter before switching to the infinite series definition of the
+            Stumpff series.
+        stumpff_series_length :
+            How many terms to evaluate in the Stumpff series when using their infinite series definitions.
+        grav_param: float
+            Constant related to the gravitational field strength of the central body. Defaults to that of the Earth.
+        track_equinoctial : bool
+            Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
+            classical orbital elements (as well as their degenerate cases) are tracked.
         """
 
         # Compute the true anomaly between the two position vectors, then use the short_transfer flag to decide if the
@@ -423,7 +497,7 @@ class Orbit:
     # ------------------------------
     # ORBITAL ELEMENT UPDATE METHODS
     # ------------------------------
-    # NOTE: Unless you know what you are doing just call update_all() because the order these are run in matters.
+    # NOTE: Unless you know what you are doing just call update_classical() because the order these are run in matters.
     def update_spf_angular_momentum(self):
         self.spf_angular_momentum = np.cross(self.position, self.velocity)
 
@@ -510,10 +584,11 @@ class Orbit:
             true_latitude %= 2 * np.pi
         self.true_latitude = true_latitude
 
-
     def update_classical(self):
         """
-        Master function which updates all the classical orbital parameters based on the given position and velocity.
+        Master function which updates all the classical orbital elements (as well as intermediate values needed to
+        compute them and the additional parameters used in degenerate cases) based on the PCI position and
+        velocity.
         """
 
         self.update_spf_angular_momentum()
@@ -533,7 +608,7 @@ class Orbit:
         """
         Master function which updates all the modified equinoctial orbital parameters based on the given position and
         velocity. Note that this does not update the semi-latus rectum and true latitude as those are already handled in
-        update_classical().
+        ``update_classical()``.
         """
 
         self.update_e_component1()

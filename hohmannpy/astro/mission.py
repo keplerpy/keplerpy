@@ -75,6 +75,7 @@ class Mission:
             )
         engine.render()
 
+    # TODO: Redo now that loggers have this functionality.
     def to_csv(self, file_path, fp_accuracy=6):
         """
         Save the resulting trajectory to a .csv file.

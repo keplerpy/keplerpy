@@ -360,9 +360,9 @@ class UniversalVariableLogger(Logger):
     Attributes
     ----------
     universal_variable_history : np.ndarray
-        (1, N) array of the universal variable over time. Units: :math:`rad`.
+        (1, N) array of the universal variable over time..
     stumpff_param_history : np.ndarray
-        (1, N) array of the Stumpff parameter over time. Units: :math:`\sqrt{rad}`.
+        (1, N) array of the Stumpff parameter over time. Units: :math:`rad`.
     """
 
     def __init__(self):
@@ -371,7 +371,7 @@ class UniversalVariableLogger(Logger):
         self.universal_variable_history = None
         self.stumpff_param_history = None
 
-        self.labels = ["Universal Variable [rad], Stumpff Parameter [sqrt(rad)]"]
+        self.labels = ["Universal Variable, Stumpff Parameter [rad]"]
 
     def setup(self, propagator: propagation.universal_variable.UniversalVariablePropagator):
         self.universal_variable_history = np.zeros([1, propagator.timesteps + 1])

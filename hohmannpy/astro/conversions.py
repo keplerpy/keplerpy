@@ -48,7 +48,7 @@ def classical_2_state(
 
     See Also
     --------
-    :func:`classic_2_state_p` : Alternate version of this function which use the semi-latus rectum instead of
+    :func:`classical_2_state_p` : Alternate version of this function which use the semi-latus rectum instead of
         the semi-major axis. Needed for parabolic orbits where the semi-major axis is infinite.
     """
 
@@ -87,8 +87,8 @@ def state_2_classical(
     Compute the specific angular momentum, eccentricity, and nodal vectors from the position and velocity. This yields
     the eccentricity which can then be used to compute the semi-major axis via the rearranged trajectory equation.
     Angular geometry using the computed vectors can be used to compute the RAAN, inclination, argument of periapsis,
-    and true anomaly via :func:`atan2()`. All but the inclination are then wrapped to :math:`[0, 2\pi]` because
-    :func:`atan2()` yields outputs on :math:`[-\pi/2, \pi/2]`.
+    and true anomaly via :func:`arctan2()`. All but the inclination are then wrapped to :math:`[0, 2\pi]` because
+    :func:`arctan2()` yields outputs on :math:`[-\pi/2, \pi/2]`.
 
     Parameters
     ----------
@@ -178,7 +178,7 @@ def classical_2_state_p(
         grav_param: float = 3.986004418e14,
 ):
     r"""
-    Parabolic version of classical_2_state() which takes in the semi-latus rectum instead of the semi-major
+    Parabolic version of :func:`classical_2_state()` which takes in the semi-latus rectum instead of the semi-major
     axis.
 
     For a parabolic orbit the semi-major axis is infinite. As a result computing the semi-latus rectum (and hence the
@@ -254,7 +254,7 @@ def state_2_classical_p(
         grav_param: float = 3.986004418e14
 ) -> tuple[float, float, float, float, float, float]:
     r"""
-    Parabolic version of state_2_classical() which takes in the semi-latus rectum instead of the semi-major
+    Parabolic version of :func:`state_2_classical()` which takes in the semi-latus rectum instead of the semi-major
     axis.
 
     For a parabolic orbit the semi-major axis is infinite. As a result computing the semi-latus rectum (and hence the
