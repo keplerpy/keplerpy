@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 
-# TODO: Redo logging to be dynamic for the new Logger class.
+# TODO: Entire class.
 class Mission:
     def __init__(
             self,

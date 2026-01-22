@@ -7,21 +7,77 @@ import importlib.resources
 
 
 class Perturbation(ABC):
+    """
+    Base class for implementing perturbations from Keplerian two-body orbital mechanics. These are designed to be used
+    in conjunction with a non-Keplerian propagator such as :class:`~hohmannpy.astro.CowellPropagator` or
+    :class:`~hohmannpy.astro.EnckePropagator`.
+
+    Child classes must implement :meth:`evaluate()`. This is called on each timestep of propagation by
+    :class:`~hohmannpy.astro.Propagator` . :meth:`~hohmannpy.astro.Propagator.propagate()` to return thw perturbing
+    acceleration for a given orbital state.
+    """
+
     def __init__(self):
         pass
 
     @abstractmethod
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+        """
+        Takes in the current time and planet-centered inertial state (the position and velocity) and returns the
+        perturbing acceleration.
+
+        Parameters
+        ----------
+        time : float
+            Current time in seconds since propagation began.
+        state : np.ndarray
+            Current translational state in planet-centered inertial coordinates given as (position, velocity).
+        """
+
         pass
 
 
-# TODO:
-#   - Fix issues with code where divisions by sine or cosine take place. This makes J2 computations invalid at certain
-#     inclinations.
-#   - Need to general lpmv array to generate it all at once.
+# TODO: Fix issues with code where divisions by sine takes place.
+# TODO: This function not working.
 class NonSphericalEarth(Perturbation):
-    def __init__(self, order: int, degree: int, gmst: float):
-        self.order = order
+    """
+    Perturbation caused by the deviations of the Earth's math distribution from a point-mass. It is assumed that the
+    gravitational potential field of the non-spherical Earth is given by the solution to a geopotential
+    partial-differential equation and in addition that this field is conservative such that the perturbing force is it's
+    gradient.
+
+    The geopotential equation is a partial differential equation of three independent variables, spherical coordinates.
+    Since this equation is separable it's solution is an infinite series whose coefficients, known as Stokes
+    coefficients (C and S), have been determined analytically. This implementation uses the 1984 Earth Gravitational
+    Model (EGM84) which includes harmonics up to order and degree 180. See the Notes section for how to upload your own
+    survey data.
+
+    In addition, to determine the geopotential at a given point the colatitude and longitude of the satellite must be
+    known. This requires knowledge of the current GMST (angle between the Greenwich meridian and the Vernal equinox) of
+    the Earth. For simplicity, the GMST is located accurately (including precession of the Vernal equinox) at the start
+    of the simulation. However, for the length of propagation it is said to simply rotate at the Earth's mean rotation
+    rate, ignoring precession effects.
+
+    Parameters
+    ----------
+    degree : int
+        Maximum degree of harmonics to include.
+    gmst : float
+        Current angle of the Greenwich meridian in :math:`rad`.
+
+    Attributes
+    ----------
+    degree : int
+        Maximum degree of harmonics to include.
+    initial_gmst : float
+        Initial angle of the Greenwich meridian in :math:`rad` when propagation began.
+    c_coeffs : np.ndarray
+        Cosine-like Stokes coefficients from EGM84.
+    s_coeffs : np.ndarray
+        Sine-like Stokes coefficients from EGM84.
+    """
+
+    def __init__(self, degree: int, gmst: float):
         self.degree = degree
         self.initial_gmst = gmst
 
@@ -31,46 +87,65 @@ class NonSphericalEarth(Perturbation):
         with importlib.resources.files("hohmannpy.resources").joinpath("egm84_s_coeffs.csv").open() as f:
             self.s_coeffs = np.loadtxt(f, delimiter=",")  # n-columns, m-rows, from [0, 180]
 
+
         super().__init__()
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+        """
+        Computes the perturbing acceleration using a geopotential model of the Earth's gravitational field.
+
+        First the colatitude and longitude are found from the current time and state using
+        :meth:`compute_colat_and_long`. The, the perturbing accelerations are computed in planet-centered inertial (PCI)
+        curvilinear/spherical coordinates. Finally, this is transformed back to rectilinear coordinates using a
+        DCM generated via :func:`~hohmannpy.dynamics.dcms.euler_2_dcm()` .
+
+        Parameters
+        ----------
+        time : float
+            Current time in seconds since propagation began.
+        state : np.ndarray
+            Current translational state in PCI coordinates given as (position, velocity).
+        """
+
         earth_radius = 6378137
         grav_param = 3.986004418e14
 
+        # Compute the colatitude and longitude.
         radius = np.sqrt(state[0] ** 2 + state[1] ** 2 + state[2] ** 2)
-        colatitude, longitude = self.compute_colat_and_long(time, state)
+        colatitude, longitude = self.compute_colat_and_long(time, state[:3])
 
+        # Compute the needed Legendre functions and their derivatives.
+        legendre_funcs = sp.special.assoc_legendre_p_all(self.degree, self.degree, np.cos(colatitude), diff_n=1)
+
+        # Compute the acceleration in curvilinear coordinates. Since the potential field and hence acceleration is an
+        # infinite series in order and degree, iterate through both of these for all three components of the
+        # acceleration.
         radial_accel = 0
         longitudinal_accel = 0
         colatitudinal_accel = 0
 
-        for n in range(1, self.order + 1):
-            for m in range(0, self.degree + 1):
+        for n in range(2, self.degree + 1):  # Degree 0 is point-mass, degree 1 is always 0, so skip.
+            for m in range(0, n + 1):
                 radial_accel += (
-                    -(n + 1) * grav_param * earth_radius ** n / radius ** (n + 2)
-                        * sp.special.lpmv(m, n, np.cos(colatitude))
+                    (n + 1) * grav_param * earth_radius ** n / radius ** (n + 2)
+                        * legendre_funcs[0, n, m + self.degree]
                         * (self.c_coeffs[n, m] * np.cos(m * longitude) + self.s_coeffs[n, m] * np.sin(m * longitude))
                 )
                 longitudinal_accel += (
                     1 / (radius * np.sin(colatitude))
                         * grav_param * earth_radius ** n / radius ** (n + 1)
-                        * sp.special.lpmv(m, n, np.cos(colatitude))
+                        *  legendre_funcs[0, n, m + self.degree]
                         * m
                         * (self.c_coeffs[n, m] * -np.sin(m * longitude) + self.s_coeffs[n, m] * np.cos(m * longitude))
                 )
-                if n == 0:
-                    continue
-                else:
-                    colatitudinal_accel += (
-                        1 / radius
-                            * grav_param * earth_radius ** n / radius ** (n + 1)
-                            * (n * np.cos(colatitude) * sp.special.lpmv(m, n, np.cos(colatitude))
-                                - (n + m) * sp.special.lpmv(m, n - 1, np.cos(colatitude)))
-                            / np.sin(colatitude)
-                            * (self.c_coeffs[n, m] * np.cos(m * longitude)
-                                + self.s_coeffs[n, m] * np.sin(m * longitude))
-                    )
+                colatitudinal_accel += (
+                    1 / radius
+                        * grav_param * earth_radius ** n / radius ** (n + 1)
+                        * legendre_funcs[1, n, m + self.degree] * np.sin(colatitude)
+                        * (self.c_coeffs[n, m] * np.cos(m * longitude) + self.s_coeffs[n, m] * np.sin(m * longitude))
+                )
 
+        # Use a DCM to convert back to rectilinear coordinates.
         curvilinear_accel = np.array([colatitudinal_accel, longitudinal_accel, radial_accel])
         curvilinear_2_rectilinear = dcms.euler_2_dcm(longitude, 3).T @ dcms.euler_2_dcm(colatitude, 2).T
         acceleration = curvilinear_2_rectilinear @ curvilinear_accel
@@ -78,11 +153,28 @@ class NonSphericalEarth(Perturbation):
         return acceleration[0], acceleration[1], acceleration[2]
 
     def compute_colat_and_long(self, time, position):
+        """
+        Computes the colatitude and longitude of the satellite wrt. the Greenwich meridian from the PCI position and
+        time.
+
+        Parameters
+        ----------
+        time : float
+            Current time in seconds since propagation began.
+        position : np.ndarray
+            Current PCI position.
+        """
+
         earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in radians.
+
+        # Update GMST using simplified precession-free rotation of the Earth.
         gmst = self.initial_gmst + earth_rot * time
 
+        # Transform position to the Earth-centered-Earth-fixed frame.
         inertial_2_earth_dcm = dcms.euler_2_dcm(gmst, 3)
         position = inertial_2_earth_dcm @ position
+
+        # Compute longitude and colatitude.
         longitude = np.arctan2(position[1], position[0])
         colatitude = np.pi / 2 - np.arctan2(position[2], np.sqrt(position[0] ** 2 + position[1] ** 2))
 
@@ -91,6 +183,57 @@ class NonSphericalEarth(Perturbation):
 
 # TODO: Deal with the singularity at the poles.
 class AtmosphericDrag(Perturbation):
+    """
+    Perturbation caused by drag due to Earth's atmosphere.
+
+    The Earth's atmosphere, especially the thermo- and exosphere, have highly variable properties due to fluctuations in
+    the Earth's magnetic field, solar activity, and the position of the Earth along its orbit. The density is needed to
+    compute the drag and is found via linear interpolation of the 2012 Committee on Space Research (COSPAR)
+    International Reference Atmosphere (CIRA-12) model. Three different tables are provided, each representing a varying
+    level of solar and geomagnetic activity.
+
+    Two additional model simplifications are made. The use of a constant ballistic coefficient also simplifies the model
+    by removing drag-attitude dependence. Also, computing geodetic latitude (which is needed to get an accurate
+    altitude measurement) involves knowing the GMST (the angle between the Greenwich meridian and Vernal equinox) of the
+    Earth. For simplicity, the GMST is located accurately (including precession of the Vernal equinox) at the start of
+    the simulation. However, for the length of propagation it is said to simply rotate at the Earth's mean rotation
+    rate, ignoring precession effects.
+
+    Parameters
+    ----------
+    ballistic_coeff : float
+        Drag times reference area of the satellite normalized by the mass.
+    gmst : float
+        Current angle of the Greenwich meridian in radians.
+    solar_activity : str
+        Which CIRA-12 reference atmosphere model to use for the density. Can select between "low", "medium", and "high".
+        See the CIRA-12 offical report [1]_ for more details on how to select between these.
+    solver_tol : float
+        Tolerance to use when solving for the geodetic latitude via fixed-point iteration.
+
+    Attributes
+    ----------
+    ballistic_coeff : float
+        Drag times reference area of the satellite normalized by the mass.
+    initial_gmst : float
+        Initial angle of the Greenwich meridian in :math:`rad` when propagation began.
+    solver_tol : float
+        Tolerance to use when solving for the geodetic latitude via fixed-point iteration.
+    densities : scipy.BSpline
+        Piece-wise linear spline generated from a density curve where the independent variable is altitudes in
+        :math:`km` and the dependent variable is densities in :math:`kg/m^3`.
+    exosphere_bound : float
+        Upper limit of the exosphere in :math:`km` above which the density is assumed to be zero and hence there is no
+        drag.
+
+    Notes
+    -----
+    The altitude above an ellipsoid Earth is found using Algorith 12 in Vallado [2]_.
+
+    .. [1] COSPAR, COSPAR International Reference Atmosphere – CIRA-2012, Version: 1.0, spacewx.com, 2012.
+    .. [2] Vallado, D. A., Fundamentals of Astrodynamics and Applications, 3rd ed., Microcosm Press/Springer, 2007.
+    """
+
     def __init__(
             self,
             ballistic_coeff: float,
@@ -102,7 +245,6 @@ class AtmosphericDrag(Perturbation):
 
         self.ballistic_coeff = ballistic_coeff
         self.initial_gmst = gmst
-        self.solar_activity = solar_activity
         self.solver_tol = solver_tol
 
         match solar_activity:
@@ -133,30 +275,68 @@ class AtmosphericDrag(Perturbation):
         self.exosphere_bound = density_curve[-1, 0]
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+        """
+        Computes the perturbing acceleration using a model drag caused by the Earth's atmosphere.
+
+        The geodetic altitude is first found using :meth:`compute_altitude()` assuming an ellipsoid Earth and then the
+        density is found via interpolation of atmospheric data. Using this the velocity wrt. the relative wind and then
+        acceleration due to drag are found.
+
+        Parameters
+        ----------
+        time : float
+            Current time in seconds since propagation began.
+        state : np.ndarray
+            Current translational state in PCI coordinates given as (position, velocity).
+        """
+
         earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in radians.
+
+        # Update GMST using simplified precession-free rotation of the Earth.
         gmst = self.initial_gmst + earth_rot * time
 
+        # Transform position to the Earth-centered-Earth-fixed frame and then compute the altitude.
         inertial_2_earth_dcm = dcms.euler_2_dcm(gmst, 3)
         position = inertial_2_earth_dcm @ state[:3]
         altitude = self.compute_altitude(position)
 
-        if altitude / 1000 > self.exosphere_bound:
+        if altitude / 1000 > self.exosphere_bound:  # Effectively no atmosphere above this altitude.
             return 0, 0, 0
 
+        # Compute density.
         density = self.densities(altitude / 1000)  # Need to convert m -> km
 
+        # Compute velocity using a simplified approximation where the atmosphere is assumed fixed to the Earth rotating
+        # at its mean rotation rate.
         velocity = state[3:] - np.cross(np.array([0, 0, earth_rot]), state[:3])
 
+        # Compute perturbing acceleration.
         acceleration = -0.5 * 1 / self.ballistic_coeff * density * np.linalg.norm(velocity) * velocity
 
         return acceleration[0], acceleration[1], acceleration[2]
 
     def compute_altitude(self, position: np.ndarray) -> float:
+        """
+        Compute the altitude above the surface of an ellipsoid Earth.
+
+        The geodetic latitude can be found as a function of the satellite's current position, however this function is
+        transcendental in latitude and hence must be solved numerically. Fixed-point iteration is used. Once the
+        latitude is known the ellipsoidal altitude may be computed.
+
+        Notes
+        -----
+        This is less accurate than using the true altitude based on a series expansion (similar to the non-spherical
+        geopotential gravity equation) but the accuracy loss is small.
+        """
+
         earth_radius = 6378.1363e3
         earth_eccentricity = 0.081819221456
 
+        # Compute initial guess for the latitude.
         x = np.arctan2(position[2], np.sqrt(position[0] ** 2 + position[1] ** 2))
-        x_old = 100
+        x_old = 100  # Dummy value to ensure error is initially above tolerance.
+
+        # Perform fixed-point iteration.
         while abs(x - x_old) > self.solver_tol:
             x_old = x
             radius_of_curvature = earth_radius / np.sqrt((1 - earth_eccentricity ** 2 * np.sin(x) ** 2))
@@ -165,6 +345,7 @@ class AtmosphericDrag(Perturbation):
                 np.sqrt(position[0] ** 2 + position[1] ** 2)
             )
 
+        # Using the latitude compute the ellipsoidal altitude.
         geodetic_latitude = x
         radius_of_curvature = earth_radius / np.sqrt((1 - earth_eccentricity ** 2 * np.sin(x) ** 2))
         altitude = np.sqrt(position[0] ** 2 + position[1] ** 2) / np.cos(geodetic_latitude) - radius_of_curvature
@@ -172,6 +353,7 @@ class AtmosphericDrag(Perturbation):
         return altitude
 
 
+# TODO: This function.
 class ThirdBodyGravity(Perturbation):
     def __init__(self, grav_params: list[float], distances: list[float]):
         super().__init__()
