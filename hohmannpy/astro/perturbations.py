@@ -72,32 +72,31 @@ class NonSphericalEarth(Perturbation):
     initial_gmst : float
         Initial angle of the Greenwich meridian in :math:`rad` when propagation began.
     c_coeffs : np.ndarray
-        Cosine-like Stokes coefficients from EGM84.
+        Cosine-like Stokes coefficients (unnormalized) from EGM84.
     s_coeffs : np.ndarray
-        Sine-like Stokes coefficients from EGM84.
+        Sine-like Stokes coefficients (unnormalized) from EGM84.
     """
 
     def __init__(self, degree: int, gmst: float):
+        super().__init__()
+
         self.degree = degree
         self.initial_gmst = gmst
 
         with importlib.resources.files("hohmannpy.resources").joinpath("egm84_c_coeffs.csv").open() as f:
-            self.c_coeffs = np.loadtxt(f, delimiter=",")  # n-columns, m-rows, from [0, 180]
+            self.c_coeffs = np.loadtxt(f, delimiter=",")  # n rows, m columns, from [0, 180]
 
         with importlib.resources.files("hohmannpy.resources").joinpath("egm84_s_coeffs.csv").open() as f:
-            self.s_coeffs = np.loadtxt(f, delimiter=",")  # n-columns, m-rows, from [0, 180]
-
-
-        super().__init__()
+            self.s_coeffs = np.loadtxt(f, delimiter=",")  # n rows, m columns, from [0, 180]
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
         """
         Computes the perturbing acceleration using a geopotential model of the Earth's gravitational field.
 
         First the colatitude and longitude are found from the current time and state using
-        :meth:`compute_colat_and_long`. The, the perturbing accelerations are computed in planet-centered inertial (PCI)
-        curvilinear/spherical coordinates. Finally, this is transformed back to rectilinear coordinates using a
-        DCM generated via :func:`~hohmannpy.dynamics.dcms.euler_2_dcm()` .
+        :meth:`compute_colat_and_long`. The, the perturbing accelerations are computed in Earth-centered Earth-fixed
+        (ECEF) curvilinear/spherical coordinates. Finally, this is transformed back to rectilinear adn then
+        Earth-centered inertial (ECI) coordinates using DCMs generated via :func:`~hohmannpy.dynamics.dcms.euler_2_dcm()`.
 
         Parameters
         ----------
@@ -109,6 +108,7 @@ class NonSphericalEarth(Perturbation):
 
         earth_radius = 6378137
         grav_param = 3.986004418e14
+        earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in rad/s.
 
         # Compute the colatitude and longitude.
         radius = np.sqrt(state[0] ** 2 + state[1] ** 2 + state[2] ** 2)
@@ -127,20 +127,20 @@ class NonSphericalEarth(Perturbation):
         for n in range(2, self.degree + 1):  # Degree 0 is point-mass, degree 1 is always 0, so skip.
             for m in range(0, n + 1):
                 radial_accel += (
-                    (n + 1) * grav_param * earth_radius ** n / radius ** (n + 2)
+                    -(n + 1) * grav_param / radius ** 2 * (earth_radius / radius) ** n
                         * legendre_funcs[0, n, m + self.degree]
                         * (self.c_coeffs[n, m] * np.cos(m * longitude) + self.s_coeffs[n, m] * np.sin(m * longitude))
                 )
                 longitudinal_accel += (
-                    1 / (radius * np.sin(colatitude))
-                        * grav_param * earth_radius ** n / radius ** (n + 1)
+                    1 / (radius ** 2 * np.sin(colatitude))
+                        * grav_param * (earth_radius / radius) ** n
                         *  legendre_funcs[0, n, m + self.degree]
                         * m
                         * (self.c_coeffs[n, m] * -np.sin(m * longitude) + self.s_coeffs[n, m] * np.cos(m * longitude))
                 )
                 colatitudinal_accel += (
-                    1 / radius
-                        * grav_param * earth_radius ** n / radius ** (n + 1)
+                    -1 / radius ** 2
+                        * grav_param * (earth_radius / radius) ** n
                         * legendre_funcs[1, n, m + self.degree] * np.sin(colatitude)
                         * (self.c_coeffs[n, m] * np.cos(m * longitude) + self.s_coeffs[n, m] * np.sin(m * longitude))
                 )
@@ -149,6 +149,11 @@ class NonSphericalEarth(Perturbation):
         curvilinear_accel = np.array([colatitudinal_accel, longitudinal_accel, radial_accel])
         curvilinear_2_rectilinear = dcms.euler_2_dcm(longitude, 3).T @ dcms.euler_2_dcm(colatitude, 2).T
         acceleration = curvilinear_2_rectilinear @ curvilinear_accel
+
+        # Acceleration is still fixed to the Earth, need to now convert to an inertial basis.
+        gmst = self.initial_gmst + earth_rot * time
+        earth_2_inertial_dcm = dcms.euler_2_dcm(gmst, 3).T
+        acceleration = earth_2_inertial_dcm @ acceleration
 
         return acceleration[0], acceleration[1], acceleration[2]
 
@@ -165,7 +170,7 @@ class NonSphericalEarth(Perturbation):
             Current PCI position.
         """
 
-        earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in radians.
+        earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in rad/s.
 
         # Update GMST using simplified precession-free rotation of the Earth.
         gmst = self.initial_gmst + earth_rot * time
@@ -179,6 +184,36 @@ class NonSphericalEarth(Perturbation):
         colatitude = np.pi / 2 - np.arctan2(position[2], np.sqrt(position[0] ** 2 + position[1] ** 2))
 
         return colatitude, longitude
+
+
+# TODO: Documentation for this class.
+class J2(Perturbation):
+    def __init__(self, gmst):
+        self.initial_gmst = gmst
+        super().__init__()
+
+    def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+        earth_radius = 6378.1363e3
+        earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in radians.
+        grav_param = 3.986004418e14
+        j2 = 1.08e-3
+
+        radius = np.linalg.norm(state[:3])
+
+        gmst = self.initial_gmst + earth_rot * time
+        inertial_2_earth_dcm = dcms.euler_2_dcm(gmst, 3)
+        position = inertial_2_earth_dcm @ state[:3]
+
+        acceleration = -3 * j2 * grav_param * earth_radius ** 2 / (2 * radius ** 5) * np.array([
+            position[0] * (1 - 5 * position[2] ** 2 / radius ** 2),
+            position[1] * (1 - 5 * position[2] ** 2 / radius ** 2),
+            position[2] * (3 - 5 * position[2] ** 2 / radius ** 2)
+        ]
+        )
+
+        acceleration = inertial_2_earth_dcm.T @ acceleration
+
+        return acceleration[0], acceleration[1], acceleration[2]
 
 
 # TODO: Deal with the singularity at the poles.

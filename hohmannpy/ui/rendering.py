@@ -170,22 +170,22 @@ class RenderEngine:
                     self.camera.radial_dynamics_flag = 1
                 case "e":  # Zoom in.
                     self.camera.radial_dynamics_flag = -1
-        else:
-            if event["event_type"] == "key_up":
-                key = event["key"].lower()
-                match key:
-                    case "w":  # Rotate up.
-                        self.camera.elevation_dynamics_flag = 0
-                    case "a":  # Rotate left.
-                        self.camera.azimuth_dynamics_flag = 0
-                    case "s":  # Rotate down.
-                        self.camera.elevation_dynamics_flag = 0
-                    case "d":  # Rotate right.
-                        self.camera.azimuth_dynamics_flag = 0
-                    case "q":  # Zoom out.
-                        self.camera.radial_dynamics_flag = 0
-                    case "e":  # Zoom in.
-                        self.camera.radial_dynamics_flag = 0
+        elif event["event_type"] == "key_up":
+            key = event["key"].lower()
+            match key:
+                case "w":  # Rotate up.
+                    self.camera.elevation_dynamics_flag = 0
+                case "a":  # Rotate left.
+                    self.camera.azimuth_dynamics_flag = 0
+                case "s":  # Rotate down.
+                    self.camera.elevation_dynamics_flag = 0
+                case "d":  # Rotate right.
+                    self.camera.azimuth_dynamics_flag = 0
+                case "q":  # Zoom out.
+                    self.camera.radial_dynamics_flag = 0
+                case "e":  # Zoom in.
+                    self.camera.radial_dynamics_flag = 0
+
 
     # --------------
     # OBJECT METHODS
