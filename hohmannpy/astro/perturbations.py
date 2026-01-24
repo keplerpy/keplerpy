@@ -37,8 +37,7 @@ class Perturbation(ABC):
         pass
 
 
-# TODO: Fix issues with code where divisions by sine takes place.
-# TODO: This function not working.
+# TODO: Deal with the singularity at the poles (division by a trig term which is zero at polar colatitudes).
 class NonSphericalEarth(Perturbation):
     """
     Perturbation caused by the deviations of the Earth's math distribution from a point-mass. It is assumed that the
@@ -102,8 +101,9 @@ class NonSphericalEarth(Perturbation):
 
         First the colatitude and longitude are found from the current time and state using
         :meth:`compute_colat_and_long`. The, the perturbing accelerations are computed in Earth-centered Earth-fixed
-        (ECEF) curvilinear/spherical coordinates. Finally, this is transformed back to rectilinear adn then
-        Earth-centered inertial (ECI) coordinates using DCMs generated via :func:`~hohmannpy.dynamics.dcms.euler_2_dcm()`.
+        (ECEF) curvilinear/spherical coordinates. Finally, this is transformed back to rectilinear and then
+        Earth-centered inertial (ECI) coordinates using DCMs generated via
+        :func:`~hohmannpy.dynamics.dcms.euler_2_dcm()`.
 
         Parameters
         ----------
@@ -227,7 +227,7 @@ class J2(Perturbation):
         return acceleration[0], acceleration[1], acceleration[2]
 
 
-# TODO: Deal with the singularity at the poles.
+# TODO: Deal with the singularity at the poles (division by a trig term which is zero at polar colatitudes).
 class AtmosphericDrag(Perturbation):
     """
     Perturbation caused by drag due to Earth's atmosphere.
