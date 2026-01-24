@@ -64,6 +64,9 @@ class NonSphericalEarth(Perturbation):
         Maximum degree of harmonics to include.
     gmst : float
         Current angle of the Greenwich meridian in :math:`rad`.
+    zonal : bool
+        Disable sectoral and tesseral harmonics to only look at zonal ones (such as J2). Does this by capping the
+        maximum order summed to when computing the acceleration terms to 0.
 
     Attributes
     ----------
@@ -71,16 +74,20 @@ class NonSphericalEarth(Perturbation):
         Maximum degree of harmonics to include.
     initial_gmst : float
         Initial angle of the Greenwich meridian in :math:`rad` when propagation began.
+    zonal : bool
+        Disable sectoral and tesseral harmonics to only look at zonal ones (such as J2). Does this by capping the
+        maximum order summed to when computing the acceleration terms to 0.
     c_coeffs : np.ndarray
         Cosine-like Stokes coefficients (unnormalized) from EGM84.
     s_coeffs : np.ndarray
         Sine-like Stokes coefficients (unnormalized) from EGM84.
     """
 
-    def __init__(self, degree: int, gmst: float):
+    def __init__(self, degree: int, gmst: float, zonal: bool = False):
         super().__init__()
 
         self.degree = degree
+        self.zonal = zonal
         self.initial_gmst = gmst
 
         with importlib.resources.files("hohmannpy.resources").joinpath("egm84_c_coeffs.csv").open() as f:
@@ -125,23 +132,27 @@ class NonSphericalEarth(Perturbation):
         colatitudinal_accel = 0
 
         for n in range(2, self.degree + 1):  # Degree 0 is point-mass, degree 1 is always 0, so skip.
-            for m in range(0, n + 1):
+            if self.zonal:  # Custom order limiter to allow for only inspecting zonal harmonics.
+                m_lim = 1
+            else:
+                m_lim = n + 1
+            for m in range(0, m_lim):
                 radial_accel += (
                     -(n + 1) * grav_param / radius ** 2 * (earth_radius / radius) ** n
-                        * legendre_funcs[0, n, m + self.degree]
+                        * legendre_funcs[0, n, m]
                         * (self.c_coeffs[n, m] * np.cos(m * longitude) + self.s_coeffs[n, m] * np.sin(m * longitude))
                 )
                 longitudinal_accel += (
                     1 / (radius ** 2 * np.sin(colatitude))
                         * grav_param * (earth_radius / radius) ** n
-                        *  legendre_funcs[0, n, m + self.degree]
+                        *  legendre_funcs[0, n, m]
                         * m
                         * (self.c_coeffs[n, m] * -np.sin(m * longitude) + self.s_coeffs[n, m] * np.cos(m * longitude))
                 )
                 colatitudinal_accel += (
                     -1 / radius ** 2
                         * grav_param * (earth_radius / radius) ** n
-                        * legendre_funcs[1, n, m + self.degree] * np.sin(colatitude)
+                        * legendre_funcs[1, n, m] * np.sin(colatitude)
                         * (self.c_coeffs[n, m] * np.cos(m * longitude) + self.s_coeffs[n, m] * np.sin(m * longitude))
                 )
 
