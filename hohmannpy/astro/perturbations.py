@@ -1,9 +1,15 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+import importlib.resources
+from typing import TYPE_CHECKING
+
 import numpy as np
 import scipy as sp
+
 from ..dynamics import dcms
-import importlib.resources
+
+if TYPE_CHECKING:
+    from . import orbit
 
 
 class Perturbation(ABC):
@@ -197,13 +203,50 @@ class NonSphericalEarth(Perturbation):
         return colatitude, longitude
 
 
-# TODO: Documentation for this class.
 class J2(Perturbation):
+    """
+    Perturbation caused by Earth's equatorial bulge, known as the J2 effect.
+
+    This is a simplified version of :class:`~hohmannpy.astro.perturbations.NonSphericalEarth` intended for us in
+    modeling purely the J2 effect. The J2-acceleration is computed explicitly in Cartesian Earth-centered Earth-fixed
+    (ECEF) coordinates before being transformed back to Earth-centered inertial coordinates (ECI). This requires use of
+    the GMST to orient the Earth wrt. the inertial frame. For simplicity, the GMST is located accurately (including
+    precession of the Vernal equinox) at the start of the simulation. However, for the length of propagation it is said
+    to simply rotate at the Earth's mean rotation rate, ignoring precession effects.
+
+    Parameters
+    ----------
+    gmst : float
+        Current angle of the Greenwich meridian in :math:`rad`.
+
+    Attributes
+    ----------
+    initial_gmst : float
+        Initial angle of the Greenwich meridian in :math:`rad` when propagation began.
+
+    See Also
+    --------
+    :class:`~hohmannpy.astro.perturbations.NonSphericalEarth` : Generalized version of this perturbation which can model
+        N-order zonal harmonic effects in addition to tesseral and sectoral ones.
+    """
+
     def __init__(self, gmst):
-        self.initial_gmst = gmst
         super().__init__()
 
+        self.initial_gmst = gmst
+
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+        """
+       Computes the perturbing acceleration due to the J2 effect.
+
+       Parameters
+       ----------
+       time : float
+           Current time in seconds since propagation began.
+       state : np.ndarray
+           Current translational state in ECI coordinates given as (position, velocity).
+       """
+
         earth_radius = 6378.1363e3
         earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in radians.
         grav_param = 3.986004418e14
@@ -322,7 +365,7 @@ class AtmosphericDrag(Perturbation):
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
         """
-        Computes the perturbing acceleration using a model drag caused by the Earth's atmosphere.
+        Computes the perturbing acceleration using a model for the drag caused by the Earth's atmosphere.
 
         The geodetic altitude is first found using :meth:`compute_altitude()` assuming an ellipsoid Earth and then the
         density is found via interpolation of atmospheric data. Using this the velocity wrt. the relative wind and then
@@ -399,13 +442,12 @@ class AtmosphericDrag(Perturbation):
         return altitude
 
 
-# TODO: This function.
-class ThirdBodyGravity(Perturbation):
-    def __init__(self, grav_params: list[float], distances: list[float]):
+class ThirdBody(Perturbation):
+    def __init__(self, grav_param: float, orbit: orbit.Orbit):
         super().__init__()
 
-        self.grav_params = grav_params
-        self.distances = distances
+        self.grav_param = grav_param
+        self.orbit = orbit
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
         pass
