@@ -161,6 +161,31 @@ class Orbit:
 
         It takes in the classical orbital elements and calls :func:`~hohmannpy.astro.conversions.elements_2_state()` to
         convert the Cartesian position and velocity and from there generate the orbit.
+
+        Parameters
+        ----------
+        sm_axis : float
+            Semi-major axis.
+        eccentricity : float
+            Eccentricity.
+        raan : float
+            Right ascension (longitude) of the ascending node.
+        argp: float
+            Argument of periapsis.
+        inclination : float
+            Inclination.
+        true_anomaly : float
+            True anomaly.
+        grav_param: float
+            Gravitational parameter of the central body (defaults to that of the Earth in :math:`\text{m}^3/\text{s}^2`).
+        track_equinoctial : bool
+            Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
+            classical orbital elements (as well as their degenerate cases) are tracked.
+
+        Returns
+        -------
+        orbit : :class:`~hohmannpy.astro.Orbit`
+            Call to the base initialization function for this class.
         """
 
         position, velocity = conversions.classical_2_state(
@@ -208,6 +233,31 @@ class Orbit:
         r"""
         Same as :meth:`from_classical_elements()` but explicitly for parabolic orbits where semi-major axis is not
         defined and the semi-latus rectum is used instead.
+
+        Parameters
+        ----------
+        sl_rectum : float
+            Semi-major axis.
+        eccentricity : float
+            Eccentricity.
+        raan : float
+            Right ascension (longitude) of the ascending node.
+        argp: float
+            Argument of periapsis.
+        inclination : float
+            Inclination.
+        true_anomaly : float
+            True anomaly.
+        grav_param: float
+            Gravitational parameter of the central body (defaults to that of the Earth in :math:`\text{m}^3/\text{s}^2`).
+        track_equinoctial : bool
+            Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
+            classical orbital elements (as well as their degenerate cases) are tracked.
+
+        Returns
+        -------
+        orbit : :class:`~hohmannpy.astro.Orbit`
+            Call to the base initialization function for this class.
         """
 
         position, velocity = conversions.classic_elements_2_state_p(
@@ -255,6 +305,32 @@ class Orbit:
         r"""
         Similar to ``from_classical_elements()`` but using the modified equinoctial elements instead of the classical
         ones.
+
+        Parameters
+        ----------
+        sl_rectum : float
+            Semi-major axis.
+        e_component1 : float
+            1-component of the project of the eccentricity vector into the equinoctial plane.
+        e_component2 : float
+            2-component of the project of the eccentricity vector into the equinoctial plane.
+        n_component1 : float
+            1-component of the project of the nodal vector into the equinoctial plane.
+        n_component2 : float
+            2-component of the project of the eccentricity vector into the equinoctial plane.
+        true_latitude : float
+            Sum of the RAAN, argument of periapsis, and true anomaly, only well-defined when the inclination is zero and
+            the orbit is circular and used in place of the true anomaly to track the satellite.
+        grav_param: float
+            Gravitational parameter of the central body (defaults to that of the Earth in :math:`\text{m}^3/\text{s}^2`).
+        track_equinoctial : bool
+            Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
+            classical orbital elements (as well as their degenerate cases) are tracked.
+
+        Returns
+        -------
+        orbit : :class:`~hohmannpy.astro.Orbit`
+            Call to the base initialization function for this class.
         """
 
         position, velocity = conversions.equinoctial_2_state(

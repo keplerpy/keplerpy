@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 import importlib.resources
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 import copy
 
 import numpy as np
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class Perturbation(ABC):
-    """
+    r"""
     Base class for implementing perturbations from Keplerian two-body orbital mechanics. These are designed to be used
     in conjunction with a non-Keplerian propagator such as :class:`~hohmannpy.astro.CowellPropagator` or
     :class:`~hohmannpy.astro.EnckePropagator`.
@@ -31,7 +31,7 @@ class Perturbation(ABC):
 
     @abstractmethod
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
-        """
+        r"""
         Takes in the current time and planet-centered inertial state (the position and velocity) and returns the
         perturbing acceleration.
 
@@ -48,7 +48,7 @@ class Perturbation(ABC):
 
 # TODO: Deal with the singularity at the poles (division by a trig term which is zero at polar colatitudes).
 class NonSphericalEarth(Perturbation):
-    """
+    r"""
     Perturbation caused by the deviations of the Earth's math distribution from a point-mass. It is assumed that the
     gravitational potential field of the non-spherical Earth is given by the solution to a geopotential
     partial-differential equation and in addition that this field is conservative such that the perturbing force is it's
@@ -105,7 +105,7 @@ class NonSphericalEarth(Perturbation):
             self.s_coeffs = np.loadtxt(f, delimiter=",")  # n rows, m columns, from [0, 180]
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
-        """
+        r"""
         Computes the perturbing acceleration using a geopotential model of the Earth's gravitational field.
 
         First the colatitude and longitude are found from the current time and state using
@@ -119,7 +119,12 @@ class NonSphericalEarth(Perturbation):
         time : float
             Current time in seconds since propagation began.
         state : np.ndarray
-            Current translational state in PCI coordinates given as (position, velocity).
+            Current translational state in ECI coordinates given as (position, velocity).
+
+        Returns
+        -------
+        acceleration : np.ndarray
+            Current translational acceleration in ECI coordinates.
         """
 
         earth_radius = 6378137
@@ -178,7 +183,7 @@ class NonSphericalEarth(Perturbation):
         return acceleration[0], acceleration[1], acceleration[2]
 
     def compute_colat_and_long(self, time, position):
-        """
+        r"""
         Computes the colatitude and longitude of the satellite wrt. the Greenwich meridian from the PCI position and
         time.
 
@@ -187,7 +192,14 @@ class NonSphericalEarth(Perturbation):
         time : float
             Current time in seconds since propagation began.
         position : np.ndarray
-            Current PCI position.
+            Current ECI position.
+
+        Returns
+        -------
+        colatitude : float
+            Angle between the ECEF 3-axis and position vector.
+        longitude : float
+            Angle between the ECEF 1-axis and the projection of the position vector in to the 1-2 ECEF plane..
         """
 
         earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in rad/s.
@@ -207,7 +219,7 @@ class NonSphericalEarth(Perturbation):
 
 
 class J2(Perturbation):
-    """
+    r"""
     Perturbation caused by Earth's equatorial bulge, known as the J2 effect.
 
     This is a simplified version of :class:`~hohmannpy.astro.perturbations.NonSphericalEarth` intended for us in
@@ -239,16 +251,21 @@ class J2(Perturbation):
         self.initial_gmst = gmst
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
-        """
-       Computes the perturbing acceleration due to the J2 effect.
+        r"""
+        Computes the perturbing acceleration due to the J2 effect.
 
-       Parameters
-       ----------
-       time : float
-           Current time in seconds since propagation began.
-       state : np.ndarray
-           Current translational state in ECI coordinates given as (position, velocity).
-       """
+        Parameters
+        ----------
+        time : float
+            Current time in seconds since propagation began.
+        state : np.ndarray
+            Current translational state in ECI coordinates given as (position, velocity).
+
+        Returns
+        -------
+        acceleration : np.ndarray
+            Current translational acceleration in PCI coordinates.
+        """
 
         earth_radius = 6378.1363e3
         earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in radians.
@@ -275,7 +292,7 @@ class J2(Perturbation):
 
 # TODO: Deal with the singularity at the poles (division by a trig term which is zero at polar colatitudes).
 class AtmosphericDrag(Perturbation):
-    """
+    r"""
     Perturbation caused by drag due to Earth's atmosphere.
 
     The Earth's atmosphere, especially the thermo- and exosphere, have highly variable properties due to fluctuations in
@@ -367,7 +384,7 @@ class AtmosphericDrag(Perturbation):
         self.exosphere_bound = density_curve[-1, 0]
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
-        """
+        r"""
         Computes the perturbing acceleration using a model for the drag caused by the Earth's atmosphere.
 
         The geodetic altitude is first found using :meth:`compute_altitude()` assuming an ellipsoid Earth and then the
@@ -380,6 +397,11 @@ class AtmosphericDrag(Perturbation):
             Current time in seconds since propagation began.
         state : np.ndarray
             Current translational state in PCI coordinates given as (position, velocity).
+
+        Returns
+        -------
+        acceleration : np.ndarray
+            Current translational acceleration in PCI coordinates.
         """
 
         earth_rot = 7.292115e-5  # Mean rotation rate of the Earth in radians.
@@ -415,6 +437,16 @@ class AtmosphericDrag(Perturbation):
         transcendental in latitude and hence must be solved numerically. Fixed-point iteration is used. Once the
         latitude is known the ellipsoidal altitude may be computed.
 
+        Parameters
+        ----------
+        position : np.ndarray
+            Current position in PCI coordinates.
+
+        Returns
+        -------
+        altitude : float
+            Current height above sea level of an ellipsoid Earth.
+
         Notes
         -----
         This is less accurate than using the true altitude based on a series expansion (similar to the non-spherical
@@ -445,8 +477,64 @@ class AtmosphericDrag(Perturbation):
         return altitude
 
 
-# TODO: Docstring for this class.
 class ThirdBody(Perturbation):
+    r"""
+    Perturbation caused by a third body. This third body can either orbit the central body or
+    orbit another arbitrary fixed point.
+
+    This class takes in a :class:`~hohmannpy.astro.Orbit` which represents the orbit of the third body. In addition, it
+    optionally accepts a second orbit which represents that of the central body. This is useful in situations where both
+    the central and third body orbit another object, such as two of Jupiter's moons about Jupiter. If the second
+    orbit is not passed then it is assumed that the third body object simply orbits the central body. These orbits are
+    then propagated during initialization. These propagated orbits are then converted to :class:`scipy.BSpline` which
+    can then be used to interpolate the position of these bodies for any time lookup in
+    :meth:`~hohmannpy.astro.ThirdBody.evaluate()`.
+
+    When said method is called the relative acceleration of the central body due to the third body as well as the direct
+    acceleration of the satellite due to the third body are computed.
+
+    Parameters
+    ----------
+    initial_global_time: :class:`~hohmannpy.astro.Time`
+        Gregorian date and UT1 time at which propagation of the third (and optionally central) body orbits should begin.
+        Should match the initial and final time passed to the :class:`~hohmannpy.astro.Mission` which holds this
+        perturbation.
+    final_global_time: :class:`~hohmannpy.astro.Time`
+        Gregorian date and UT1 time at which propagation of the third (and optionally central) body orbits should end.
+        Should match the initial and final time passed to the :class:`~hohmannpy.astro.Mission` which holds this
+        perturbation.
+    third_body_orbit: :class:`~hohmannpy.astro.Orbit`
+        Orbit of the third body.
+    central_body_orbit: :class:`~hohmannpy.astro.Orbit`
+        Orbit of the central body. Optional, if not provided it will be assumed the third body orbits the central body.
+    propagator: :class:`~hohmannpy.astro.Propagator`
+        What propagation method to use for the central and third body's orbits. These are assumed to be Keplerian and as
+        such either :class:`~hohmannpy.astro.KeplerPropagator` or :class:`~hohmannpy.astro.UniversalVariablePropagator`.
+    legendre: bool
+        Whether to use a Legendre polynomial expansion in the computation of the third body's perturbing effects. Used
+        to avoid small difference numerical accuracy losses from the difference between the two position cubics due to
+        their potential similarities.
+    legendre_series_length: int
+        If a Legendre polynomial expansion is used, how many terms to include.
+
+    Attributes
+    ----------
+    tb_grav_param : float
+        Gravitational parameter of the third body.
+    legendre: bool
+        Whether to use a Legendre polynomial expansion in the computation of the third body's perturbing effects. Used
+        to avoid small difference numerical accuracy losses from the difference between the two position cubics due to
+        their potential similarities.
+    legendre_series_length: int
+        If a Legendre polynomial expansion is used, how many terms to include.
+    tb_orbit_spline : :class:`scipy.BSpline`
+        Linear spline of the third body trajectory. Calling it via ``tb_orbit_spline(time)`` returns the interpolated
+        orbit at that time.
+    cb_orbit_spline : Union[:class:`scipy.BSpline`, func]
+        Linear spline of the central body trajectory. Calling it via ``tb_orbit_spline(time)`` returns the interpolated
+        orbit at that time.
+    """
+
     def __init__(
             self,
             initial_global_time: time.Time,
@@ -497,6 +585,27 @@ class ThirdBody(Perturbation):
             self.cb_orbit_spline = dummy_spline
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+        """
+        Computes the perturbing acceleration due to the third body.
+
+        Uses :attr:`tb_orbit_spline` and :attr:`cb_orbit_spline` to approximate the position of the third body wrt. the
+        central body and satellite. These are then used in conjunction with Newton's Law of Universal Gravitation to
+        compute the total perturbing acceleration due to the third body. Optionally, some of the terms in this equation
+        are approximated using Legendre polynomials to avoid numerical difficulties.
+
+        Parameters
+        ----------
+        time : float
+            Current time in seconds since propagation began.
+        state : np.ndarray
+            Current translational state in ECI coordinates given as (position, velocity).
+
+        Returns
+        -------
+        acceleration : np.ndarray
+            Current translational acceleration in PCI coordinates.
+        """
+
         # Calculate position vectors.
         position_tb_wrt_cb = -self.cb_orbit_spline(time) + self.tb_orbit_spline(time)
         position_tb_wrt_sat = position_tb_wrt_cb - state[:3]
