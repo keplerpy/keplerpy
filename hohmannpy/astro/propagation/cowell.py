@@ -10,7 +10,7 @@ class CowellPropagator(base.Propagator):
     Propagator which simply numerically integrates the equations of motion of the orbit using scipy's solve_ivp(). By
     default, only the gravity of the central body is considered but unlike Keplerian methods perturbing forces may also
     be included.
-        By default, RK45 (a Rune-Kutta method of the 5th-order with a 4th-order error estimate) is used for
+        By default, RK45 (a Runge-Kutta method of the 5th-order with a 4th-order error estimate) is used for
     numerical integration.
 
     NOTE: Numerical integration's accuracy is wholly based on the solver tolerances unlike Keplerian methods. This is

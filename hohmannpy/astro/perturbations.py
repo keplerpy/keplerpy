@@ -2,14 +2,17 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import importlib.resources
 from typing import TYPE_CHECKING
+import copy
 
 import numpy as np
 import scipy as sp
 
 from ..dynamics import dcms
+from . import propagation, logging
 
 if TYPE_CHECKING:
     from . import orbit
+    from . import time
 
 
 class Perturbation(ABC):
@@ -145,20 +148,20 @@ class NonSphericalEarth(Perturbation):
             for m in range(0, m_lim):
                 radial_accel += (
                     -(n + 1) * grav_param / radius ** 2 * (earth_radius / radius) ** n
-                        * legendre_funcs[0, n, m]
+                        * (-1) ** m * legendre_funcs[0, n, m]
                         * (self.c_coeffs[n, m] * np.cos(m * longitude) + self.s_coeffs[n, m] * np.sin(m * longitude))
                 )
                 longitudinal_accel += (
                     1 / (radius ** 2 * np.sin(colatitude))
                         * grav_param * (earth_radius / radius) ** n
-                        *  legendre_funcs[0, n, m]
+                        * (-1) ** m * legendre_funcs[0, n, m]
                         * m
                         * (self.c_coeffs[n, m] * -np.sin(m * longitude) + self.s_coeffs[n, m] * np.cos(m * longitude))
                 )
                 colatitudinal_accel += (
                     -1 / radius ** 2
                         * grav_param * (earth_radius / radius) ** n
-                        * legendre_funcs[1, n, m] * np.sin(colatitude)
+                        * (-1) ** m * legendre_funcs[1, n, m] * np.sin(colatitude)
                         * (self.c_coeffs[n, m] * np.cos(m * longitude) + self.s_coeffs[n, m] * np.sin(m * longitude))
                 )
 
@@ -442,12 +445,86 @@ class AtmosphericDrag(Perturbation):
         return altitude
 
 
+# TODO: Docstring for this class.
 class ThirdBody(Perturbation):
-    def __init__(self, grav_param: float, orbit: orbit.Orbit):
+    def __init__(
+            self,
+            initial_global_time: time.Time,
+            final_global_time: time.Time,
+            third_body_orbit: orbit.Orbit,
+            central_body_orbit: orbit.Orbit = None,
+            propagator: propagation.Propagator = propagation.UniversalVariablePropagator(),
+            legendre: bool = True,
+            legendre_series_length: int = 10,
+    ):
         super().__init__()
 
-        self.grav_param = grav_param
-        self.orbit = orbit
+        self.tb_grav_param = third_body_orbit.grav_param
+        self.legendre = legendre
+        self.legendre_series_length = legendre_series_length
+
+        # Safeguard to make sure the propagator has a state logger because we need this.
+        if not any(isinstance(logger, logging.StateLogger) for logger in propagator.loggers):
+            propagator.loggers.insert(0, logging.StateLogger())
+        tb_propagator = copy.deepcopy(propagator)
+        cb_propagator = propagator
+
+        # Setup propagator and then call propagate() to generate trajectory of third-body. Then convert this to a
+        # numpy.BSpline.
+        tb_propagator.setup(
+            orbit=third_body_orbit,
+            final_time=(final_global_time.julian_date - initial_global_time.julian_date) * 86400
+        )
+        tb_propagator.propagate()
+        tb_times = tb_propagator.loggers[0].time_history
+        tb_traj = tb_propagator.loggers[0].position_history
+        self.tb_orbit_spline = sp.interpolate.make_interp_spline(tb_times.squeeze(), tb_traj.T, k=1)
+
+        # Setup propagator and then call propagate() to generate trajectory of the central-body. Then convert this to a
+        # numpy.BSpline.
+        if central_body_orbit is not None:
+            cb_propagator.setup(
+                orbit=central_body_orbit,
+                final_time=(final_global_time.julian_date - initial_global_time.julian_date) * 86400
+            )
+            cb_propagator.propagate()
+            cb_times = cb_propagator.loggers[0].time_history
+            cb_traj = cb_propagator.loggers[0].position_history
+            self.cb_orbit_spline = sp.interpolate.make_interp_spline(cb_times.squeeze(), cb_traj.T, k=1)
+        else:  # If no orbit provide assume central body is stationary (ex. third body is a moon).
+            def dummy_spline(x):
+                return np.array([0, 0, 0])
+            self.cb_orbit_spline = dummy_spline
 
     def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
-        pass
+        # Calculate position vectors.
+        position_tb_wrt_cb = -self.cb_orbit_spline(time) + self.tb_orbit_spline(time)
+        position_tb_wrt_sat = position_tb_wrt_cb - state[:3]
+
+        if self.legendre:
+            # Compute cosine of phase angle.
+            phase_angle_cosine = (
+                    np.dot(state[:3], position_tb_wrt_cb)
+                        / (np.linalg.norm(state[:3]) * np.linalg.norm(position_tb_wrt_cb))
+            )
+
+            # Get sum of Legendre polynomials.
+            legendre_sum = 0
+            position_ratio = np.linalg.norm(state[:3]) / np.linalg.norm(position_tb_wrt_cb)
+            for i in range(1, self.legendre_series_length):
+                legendre_sum += sp.special.legendre_p(i, phase_angle_cosine) * position_ratio ** i
+
+            # Compute acceleration.
+            acceleration = (
+                    -self.tb_grav_param / np.linalg.norm(position_tb_wrt_cb) ** 3
+                        * (state[:3] - position_tb_wrt_sat * (3 * legendre_sum + 3 * legendre_sum ** 2 + legendre_sum ** 3))
+            )
+        else:
+            acceleration = (
+                self.tb_grav_param * (
+                    position_tb_wrt_sat / np.linalg.norm(position_tb_wrt_sat) ** 3
+                        - position_tb_wrt_cb / np.linalg.norm(position_tb_wrt_cb) ** 3
+                )
+            )
+
+        return acceleration[0], acceleration[1], acceleration[2]

@@ -65,7 +65,7 @@ class Orbit:
     sm_axis : float
         :math:`1/2` the length of the orbit's major axis.
     sl_rectum : float
-        :math`1/2` the length of the orbit's latus rectum (line perpendicular to the major axis whose midpoint is the
+        :math:`1/2` the length of the orbit's latus rectum (line perpendicular to the major axis whose midpoint is the
         primary foci of the orbit.
     eccentricity : float
         How elliptical the orbit is (<1 = ellipse, >1 = hyperbola).
@@ -159,8 +159,8 @@ class Orbit:
         r"""
         Alternative constructor which performs orbit determination using the classical orbital elements.
 
-        It takes in the classical orbital elements and calls :func:`~hohmannpy.astro.elements_2_state()` to convert the
-        Cartesian position and velocity and from there generate the orbit.
+        It takes in the classical orbital elements and calls :func:`~hohmannpy.astro.conversions.elements_2_state()` to
+        convert the Cartesian position and velocity and from there generate the orbit.
         """
 
         position, velocity = conversions.classical_2_state(
@@ -388,6 +388,8 @@ class Orbit:
         of the parameter is found, the f and g functions are constructed and used to solve for the velocity at both
         points.
 
+        Parameters
+        ----------
         position1 : np.ndarray
             A (3, ) vector of the satellite's planet-centered inertial position at one of the two sightings.
         position2 : np.ndarray

@@ -1,7 +1,11 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
 import numpy as np
-from .. import orbit, perturbations, logging
+
+if TYPE_CHECKING:
+    from .. import orbit, perturbations, logging
 
 
 class Propagator(ABC):
@@ -50,8 +54,8 @@ class Propagator(ABC):
     def setup(
             self,
             orbit: orbit.Orbit,
-            perturbations: list[perturbations.Perturbation],
             final_time: float,
+            perturbations: list[perturbations.Perturbation] = None,
     ):
         """
         Perform all the behind-the-scenes bookkeeping necessary to set up this object before propagating.
