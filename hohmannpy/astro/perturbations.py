@@ -8,7 +8,7 @@ import numpy as np
 import scipy as sp
 
 from ..dynamics import dcms
-from . import propagation, logging
+from . import propagation, logging, orbit
 
 if TYPE_CHECKING:
     from . import orbit
@@ -242,7 +242,7 @@ class J2(Perturbation):
     See Also
     --------
     :class:`~hohmannpy.astro.perturbations.NonSphericalEarth` : Generalized version of this perturbation which can model
-        N-order zonal harmonic effects in addition to tesseral and sectoral ones.
+        N-order zonal harmonic effects as well as tesseral and sectoral ones.
     """
 
     def __init__(self, gmst):
@@ -477,9 +477,9 @@ class AtmosphericDrag(Perturbation):
         return altitude
 
 
-class ThirdBody(Perturbation):
+class ThirdBodyGravity(Perturbation):
     r"""
-    Perturbation caused by a third body. This third body can either orbit the central body or
+    Perturbation caused by a third body's gravity. This third body can either orbit the central body or
     orbit another arbitrary fixed point.
 
     This class takes in a :class:`~hohmannpy.astro.Orbit` which represents the orbit of the third body. In addition, it
@@ -487,8 +487,7 @@ class ThirdBody(Perturbation):
     the central and third body orbit another object, such as two of Jupiter's moons about Jupiter. If the second
     orbit is not passed then it is assumed that the third body object simply orbits the central body. These orbits are
     then propagated during initialization. These propagated orbits are then converted to :class:`scipy.BSpline` which
-    can then be used to interpolate the position of these bodies for any time lookup in
-    :meth:`~hohmannpy.astro.ThirdBody.evaluate()`.
+    can then be used to interpolate the position of these bodies for any time lookup in :meth:`evaluate()`.
 
     When said method is called the relative acceleration of the central body due to the third body as well as the direct
     acceleration of the satellite due to the third body are computed.
@@ -637,3 +636,256 @@ class ThirdBody(Perturbation):
             )
 
         return acceleration[0], acceleration[1], acceleration[2]
+
+
+class LunarGravity(ThirdBodyGravity):
+    r"""
+    Perturbation caused by the Moon's gravity.
+
+    This class implements a specialized version of :class:`~hohmannpy.astro.perturbations.ThirdBodyGravity` adjusted to
+    specifically account for the third body perturbations due to the Earth's moon.
+
+    Note that the true anomaly of the Moon is not computed automatically based on the dates of desired propagation, the
+    accurate true anomaly must be input separately. This is because the orbit of the moon is not truly Keplerian due to
+    apsidal precession amongst other effects. Another result of this is that the Keplerian propagation of the Moon's
+    orbit used by this class for simulating its third-body gravitational effects is also coarse.
+
+    Parameters
+    ----------
+    initial_global_time: :class:`~hohmannpy.astro.Time`
+        Gregorian date and UT1 time at which propagation of the third (and optionally central) body orbits should begin.
+        Should match the initial and final time passed to the :class:`~hohmannpy.astro.Mission` which holds this
+        perturbation.
+    final_global_time: :class:`~hohmannpy.astro.Time`
+        Gregorian date and UT1 time at which propagation of the third (and optionally central) body orbits should end.
+        Should match the initial and final time passed to the :class:`~hohmannpy.astro.Mission` which holds this
+        perturbation.
+    initial_true_anomaly: float
+        True anomaly of the Moon.
+    propagator: :class:`~hohmannpy.astro.propagation.Propagator`
+        What propagation method to use for the central and third body's orbits. These are assumed to be Keplerian and as
+        such either :class:`~hohmannpy.astro.propagation.KeplerPropagator` or
+        :class:`~hohmannpy.astro.propagation.UniversalVariablePropagator`.
+    legendre: bool
+        Whether to use a Legendre polynomial expansion in the computation of the third body's perturbing effects. Used
+        to avoid small difference numerical accuracy losses from the difference between the two position cubics due to
+        their potential similarities.
+    legendre_series_length: int
+        If a Legendre polynomial expansion is used, how many terms to include.
+
+    See Also
+    --------
+    :class:`~hohmannpy.astro.perturbations.ThirdBodyGravity` : Base version of this class which can be used for any third body.
+    """
+
+    def __init__(
+            self,
+            initial_global_time: time.Time,
+            final_global_time: time.Time,
+            initial_true_anomaly: float,
+            propagator: propagation.Propagator = propagation.UniversalVariablePropagator(),
+            legendre: bool = True,
+            legendre_series_length: int = 10,
+    ):
+        lunar_orbit = orbit.Orbit.from_classical_elements(
+            sm_axis=3.844e8,
+            eccentricity=0.0549,
+            inclination=np.rad2deg(5.145),
+            raan=np.rad2deg(125.08),
+            argp=np.deg2rad(318.15),
+            true_anomaly=initial_true_anomaly,
+        )
+
+        super().__init__(
+            initial_global_time=initial_global_time,
+            final_global_time=final_global_time,
+            third_body_orbit=lunar_orbit,
+            propagator=propagator,
+            legendre=legendre,
+            legendre_series_length=legendre_series_length
+        )
+
+
+class SolarGravity(ThirdBodyGravity):
+    r"""
+    Perturbation caused by the Sun's gravity.
+
+    This class implements a specialized version of :class:`~hohmannpy.astro.perturbations.ThirdBodyGravity` adjusted to
+    specifically account for the third body perturbations due to the Sun. Note that the true anomaly of the Earth wrt.
+    to the ecliptic plane is computed automatically based on the dates of desired propagation.
+
+    Parameters
+    ----------
+    initial_global_time: :class:`~hohmannpy.astro.Time`
+        Gregorian date and UT1 time at which propagation of the third (and optionally central) body orbits should begin.
+        Should match the initial and final time passed to the :class:`~hohmannpy.astro.Mission` which holds this
+        perturbation.
+    final_global_time: :class:`~hohmannpy.astro.Time`
+        Gregorian date and UT1 time at which propagation of the third (and optionally central) body orbits should end.
+        Should match the initial and final time passed to the :class:`~hohmannpy.astro.Mission` which holds this
+        perturbation.
+    propagator: :class:`~hohmannpy.astro.propagation.Propagator`
+        What propagation method to use for the central and third body's orbits. These are assumed to be Keplerian and as
+        such either :class:`~hohmannpy.astro.propagation.KeplerPropagator` or
+        :class:`~hohmannpy.astro.propagation.UniversalVariablePropagator`.
+    legendre: bool
+        Whether to use a Legendre polynomial expansion in the computation of the third body's perturbing effects. Used
+        to avoid small difference numerical accuracy losses from the difference between the two position cubics due to
+        their potential similarities.
+    legendre_series_length: int
+        If a Legendre polynomial expansion is used, how many terms to include.
+
+    See Also
+    --------
+    :class:`~hohmannpy.astro.perturbations.ThirdBodyGravity` : Base version of this class which can be used for any third body.
+    """
+
+    def __init__(
+            self,
+            initial_global_time: time.Time,
+            final_global_time: time.Time,
+            solver_tol: float = 1e-8,
+            propagator: propagation.Propagator = propagation.UniversalVariablePropagator(),
+            legendre: bool = True,
+            legendre_series_length: int = 10,
+    ):
+        initial_true_anomaly = self.compute_initial_true_anomaly(initial_global_time, solver_tol)
+        earth_orbit = orbit.Orbit.from_classical_elements(
+            sm_axis=149597870.7e3,
+            eccentricity=0.0167086,
+            inclination=0,
+            raan=0,
+            argp=np.deg2rad(102.937),
+            true_anomaly=initial_true_anomaly,
+            grav_param=1.32712440018e20
+        )
+
+        super().__init__(
+            initial_global_time=initial_global_time,
+            final_global_time=final_global_time,
+            third_body_orbit=earth_orbit,
+            propagator=propagator,
+            legendre=legendre,
+            legendre_series_length=legendre_series_length
+        )
+
+        # Change from Earth orbiting Earth to Sun orbiting Earth.
+        tb_orbit_spline = copy.deepcopy(self.tb_orbit_spline)
+        def inverted_spline(x):
+            return tb_orbit_spline(x) * -1
+        self.tb_orbit_spline = inverted_spline
+
+    def compute_initial_true_anomaly(self, initial_global_time: time.Time, solver_tol: float):
+        """
+        Calculates the true anomaly of the Earth at the initial date.
+
+        Parameters
+        ----------
+        initial_global_time : time.Time
+            Gregorian date and UT1 time at which the Earth is initially located.
+        solver_tol : float
+            Error tolerance to use when solving Kepler's equation.
+
+        Returns
+        -------
+        initial_true_anomaly : float
+            True anomaly of the earth corresponding to ``initial_global_time``.
+        """
+
+        earth_mean_motion = np.deg2rad(0.98560028)
+        earth_eccentricity = 0.0167086
+        j2000_mean_anomaly = 357.5277233
+        j2000_julian_time = 2451545
+
+        # Compute the initial mean anomaly wrt. J2000 and then solve Kepler's equation for the corresponding initial
+        # eccentric anomaly.
+        initial_mean_anomaly = (
+                j2000_mean_anomaly
+                    + earth_mean_motion * (initial_global_time.julian_date - j2000_julian_time)
+        )
+        eq = lambda x: initial_mean_anomaly - x + earth_eccentricity * np.sin(x)
+        initial_eccentric_anomaly = sp.optimize.newton(eq, 0, tol=solver_tol)
+
+        # Use Gauss' equation to compute the initial eccentric anomaly to the initial true anomaly.s
+        return  (
+            2 * np.arctan(
+                np.sqrt((1 + earth_eccentricity) / (1 - earth_eccentricity)) * np.tan(initial_eccentric_anomaly / 2)
+            )
+        )
+
+
+class SolarRadiation(Perturbation):
+    def __init__(
+            self,
+            solar_area: float,
+            reflectivity: float,
+            initial_global_time: time.Time,
+            final_global_time: time.Time,
+            propagator: propagation.Propagator = propagation.UniversalVariablePropagator(),
+
+    ):
+        super().__init__()
+
+        initial_true_anomaly = self.compute_initial_true_anomaly(initial_global_time, solver_tol)
+        earth_orbit = orbit.Orbit.from_classical_elements(
+            sm_axis=149597870.7e3,
+            eccentricity=0.0167086,
+            inclination=0,
+            raan=0,
+            argp=np.deg2rad(102.937),
+            true_anomaly=initial_true_anomaly,
+            grav_param=1.32712440018e20
+        )
+
+    @abstractmethod
+    def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+        r"""
+        TBD
+
+        Parameters
+        ----------
+        time : float
+            Current time in seconds since propagation began.
+        state : np.ndarray
+            Current translational state in planet-centered inertial coordinates given as (position, velocity).
+        """
+
+        pass
+
+    def compute_initial_true_anomaly(self, initial_global_time: time.Time, solver_tol: float):
+        """
+        Calculates the true anomaly of the Earth at the initial date.
+
+        Parameters
+        ----------
+        initial_global_time : time.Time
+            Gregorian date and UT1 time at which the Earth is initially located.
+        solver_tol : float
+            Error tolerance to use when solving Kepler's equation.
+
+        Returns
+        -------
+        initial_true_anomaly : float
+            True anomaly of the earth corresponding to ``initial_global_time``.
+        """
+
+        earth_mean_motion = np.deg2rad(0.98560028)
+        earth_eccentricity = 0.0167086
+        j2000_mean_anomaly = 357.5277233
+        j2000_julian_time = 2451545
+
+        # Compute the initial mean anomaly wrt. J2000 and then solve Kepler's equation for the corresponding initial
+        # eccentric anomaly.
+        initial_mean_anomaly = (
+                j2000_mean_anomaly
+                + earth_mean_motion * (initial_global_time.julian_date - j2000_julian_time)
+        )
+        eq = lambda x: initial_mean_anomaly - x + earth_eccentricity * np.sin(x)
+        initial_eccentric_anomaly = sp.optimize.newton(eq, 0, tol=solver_tol)
+
+        # Use Gauss' equation to compute the initial eccentric anomaly to the initial true anomaly.s
+        return (
+                2 * np.arctan(
+            np.sqrt((1 + earth_eccentricity) / (1 - earth_eccentricity)) * np.tan(initial_eccentric_anomaly / 2)
+        )
+        )
