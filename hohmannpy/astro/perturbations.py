@@ -695,8 +695,8 @@ class LunarGravity(ThirdBodyGravity):
         lunar_orbit = orbit.Orbit.from_classical_elements(
             sm_axis=3.844e8,
             eccentricity=0.0549,
-            inclination=np.rad2deg(5.145),
-            raan=np.rad2deg(125.08),
+            inclination=np.deg2rad(5.145),
+            raan=np.deg2rad(125.08),
             argp=np.deg2rad(318.15),
             true_anomaly=initial_true_anomaly,
         )
@@ -769,7 +769,7 @@ class SolarGravity(ThirdBodyGravity):
             grav_param=1.32712440018e20
         )
 
-        earth_tilt = np.deg2rad(23.439291115)  # Rotate from Sun-fixed to Earth-fixed frame via the Earth's axial tilt.
+        earth_tilt = np.deg2rad(-23.439291115)  # Rotate from Sun-fixed to Earth-fixed frame via the Earth's axial tilt.
         super().__init__(
             initial_global_time=initial_global_time,
             final_global_time=final_global_time,
@@ -976,7 +976,7 @@ class SolarRadiation(Perturbation):
         speed_of_light = 3e8
 
         # Compute the position of the Sun wrt. the satellite.
-        earth_tilt = np.deg2rad(23.439291115)
+        earth_tilt = np.deg2rad(-23.439291115)
         position_earth_wrt_sun = dcms.euler_2_dcm(earth_tilt, 1) @ self.earth_orbit_spline(time)
         position_sun_wrt_sat = -(position_earth_wrt_sun + state[:3])
 
