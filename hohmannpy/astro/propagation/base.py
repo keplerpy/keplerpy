@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from .. import orbit, perturbations, logging
 
 
+# TODO: Redo docstring and allow propagation of multiple orbit's simultaneously.
 class Propagator(ABC):
     """
     Base class for all propagators. All derivatives revolve around the method propagate() which takes in the initial

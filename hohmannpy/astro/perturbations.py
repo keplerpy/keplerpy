@@ -498,6 +498,8 @@ class ThirdBodyGravity(Perturbation):
         Gregorian date and UT1 time at which propagation of the third (and optionally central) body orbits should end.
         Should match the initial and final time passed to the :class:`~hohmannpy.astro.Mission` which holds this
         perturbation.
+    tb_grav_param : float
+        Gravitational parameter of the third body.
     third_body_orbit: :class:`~hohmannpy.astro.Orbit`
         Orbit of the third body.
     central_body_orbit: :class:`~hohmannpy.astro.Orbit`
@@ -539,6 +541,7 @@ class ThirdBodyGravity(Perturbation):
             self,
             initial_global_time: time.Time,
             final_global_time: time.Time,
+            third_body_grav_param: float,
             third_body_orbit: orbit.Orbit,
             central_body_orbit: orbit.Orbit = None,
             dcm: np.ndarray = None,
@@ -548,7 +551,7 @@ class ThirdBodyGravity(Perturbation):
     ):
         super().__init__()
 
-        self.tb_grav_param = third_body_orbit.grav_param
+        self.tb_grav_param = third_body_grav_param
         self.legendre = legendre
         self.legendre_series_length = legendre_series_length
         self.dcm = dcm
@@ -570,7 +573,7 @@ class ThirdBodyGravity(Perturbation):
         tb_propagator.propagate()
         tb_times = tb_propagator.loggers[0].time_history
         tb_traj = tb_propagator.loggers[0].position_history
-        self.tb_orbit_spline = sp.interpolate.make_interp_spline(tb_times.squeeze(), tb_traj.T, k=1)
+        self.tb_orbit_spline = sp.interpolate.make_interp_spline(tb_times.squeeze(), tb_traj.T, k=3)
 
         # Setup propagator and then call propagate() to generate trajectory of the central-body. Then convert this to a
         # numpy.BSpline.
@@ -582,7 +585,7 @@ class ThirdBodyGravity(Perturbation):
             cb_propagator.propagate()
             cb_times = cb_propagator.loggers[0].time_history
             cb_traj = cb_propagator.loggers[0].position_history
-            self.cb_orbit_spline = sp.interpolate.make_interp_spline(cb_times.squeeze(), cb_traj.T, k=1)
+            self.cb_orbit_spline = sp.interpolate.make_interp_spline(cb_times.squeeze(), cb_traj.T, k=3)
         else:  # If no orbit provide assume central body is stationary (ex. third body is a moon).
             def dummy_spline(x):
                 return np.array([0, 0, 0])
@@ -704,6 +707,7 @@ class LunarGravity(ThirdBodyGravity):
         super().__init__(
             initial_global_time=initial_global_time,
             final_global_time=final_global_time,
+            third_body_grav_param=4.9048695e12,
             third_body_orbit=lunar_orbit,
             propagator=propagator,
             legendre=legendre,
@@ -773,6 +777,7 @@ class SolarGravity(ThirdBodyGravity):
         super().__init__(
             initial_global_time=initial_global_time,
             final_global_time=final_global_time,
+            third_body_grav_param=1.32712440018e20,
             third_body_orbit=earth_orbit,
             propagator=propagator,
             legendre=legendre,
