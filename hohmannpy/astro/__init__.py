@@ -18,7 +18,7 @@ from .mission import Mission
 from .orbit import Orbit
 from .time import Time
 from .perturbations import (
-    Perturbation, NonSphericalEarth, AtmosphericDrag, J2, ThirdBodyGravity, LunarGravity, SolarGravity
+    Perturbation, NonSphericalEarth, AtmosphericDrag, J2, ThirdBodyGravity, LunarGravity, SolarGravity, SolarRadiation
 )
 from .logging import (
     Logger, StateLogger, ClassicalElementsLogger,
