@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 import importlib.resources
-from typing import TYPE_CHECKING, Union
+from typing import Union
 import copy
 
 import numpy as np
@@ -119,7 +119,7 @@ class NonSphericalEarth(Perturbation):
 
         Returns
         -------
-        acceleration : np.ndarray
+        acceleration : tuple[float, float, float]
             Current translational acceleration in ECI coordinates.
         """
 
@@ -259,7 +259,7 @@ class J2(Perturbation):
 
         Returns
         -------
-        acceleration : np.ndarray
+        acceleration : tuple[float, float, float]
             Current translational acceleration in PCI coordinates.
         """
 
@@ -396,7 +396,7 @@ class AtmosphericDrag(Perturbation):
 
         Returns
         -------
-        acceleration : np.ndarray
+        acceleration : tuple[float, float, float]
             Current translational acceleration in PCI coordinates.
         """
 
@@ -498,7 +498,7 @@ class ThirdBodyGravity(Perturbation):
         Gregorian date and UT1 time at which propagation of the third (and optionally central) body orbits should end.
         Should match the initial and final time passed to the :class:`~hohmannpy.astro.Mission` which holds this
         perturbation.
-    tb_grav_param : float
+    third_body_grav_param : float
         Gravitational parameter of the third body.
     third_body_orbit: :class:`~hohmannpy.astro.Orbit`
         Orbit of the third body.
@@ -540,7 +540,7 @@ class ThirdBodyGravity(Perturbation):
     def __init__(
             self,
             initial_global_time: time.Time,
-            final_global_time: time.Time,
+            final_global_time:  time.Time,
             third_body_grav_param: float,
             third_body_orbit: orbit.Orbit,
             central_body_orbit: orbit.Orbit = None,
@@ -609,7 +609,7 @@ class ThirdBodyGravity(Perturbation):
 
         Returns
         -------
-        acceleration : np.ndarray
+        acceleration : tuple[float, float, float]
             Current translational acceleration in PCI coordinates.
         """
 
@@ -842,7 +842,7 @@ class SolarRadiation(Perturbation):
 
     A few assumptions are made to simply computation. First, the solar irradiance is given by an equation developed by
     Wertz [1]. This model uses the number of days passed since aphelion. Aphelion is taken to have occurred on the most
-    recent July 4th, 12:00:00 UT1 preceding ``initial_global_tine``. It is then taken to occur every 365.25 Julian days
+    recent July 4th, 12:00:00 UT1 preceding ``initial_global_time``. It is then taken to occur every 365.25 Julian days
     after this (leap days are not accounted for). The 1-2 plane of the Earth-centered-inertial basis is also assumed to
     be inclined at constant 23.5 :math:`deg` from the ecliptic plane. The reflective area facing the Sun and
     reflectivity of said area is also assumed to be constant with the satellite's attitude not accounted for. As a
@@ -866,13 +866,13 @@ class SolarRadiation(Perturbation):
         Gregorian date and UT1 time at which propagation of the third (and optionally central) body orbits should end.
         Should match the initial and final time passed to the :class:`~hohmannpy.astro.Mission` which holds this
         perturbation.
+    irradiance_scale_factor : float
+        Constant to scale the solar irradiance by at all timesteps. Useful for representing heightened solar activity
+        such as during solar flares.
     propagator: :class:`~hohmannpy.astro.propagation.Propagator`
         What propagation method to use for the Earth's orbit. This is assumed to be Keplerian and as such either
         :class:`~hohmannpy.astro.propagation.KeplerPropagator` or
         :class:`~hohmannpy.astro.propagation.UniversalVariablePropagator` must be used.
-    irradiance_scale_factor : float
-        Constant to scale the solar irradiance by at all timesteps. Useful for representing heightened solar activity
-        such as during solar flares.
     solver_tol : float
         Error tolerance to use when solving Kepler's equation for the Earth's initial true anomaly.
 
@@ -893,7 +893,7 @@ class SolarRadiation(Perturbation):
         orbit at that time.
     initial_jd_since_aphelion : float
         Number of Julian days passed since aphelion, taken to be on the most recent July 4th before
-        ``initial_global_time`.`
+        ``initial_global_time``.
 
     .. [1] James R. Wertz, Spacecraft Attitude Determination and Control, Astrophysics and Space Science Library, vol.
         73. Dordrecht, The Netherlands: Springer, 1978
@@ -906,8 +906,8 @@ class SolarRadiation(Perturbation):
             mass: float,
             initial_global_time: time.Time,
             final_global_time: time.Time,
-            propagator: propagation.Propagator = propagation.UniversalVariablePropagator(),
             irradiance_scale_factor: float = 1,
+            propagator: propagation.Propagator = propagation.UniversalVariablePropagator(),
             solver_tol: float = 1e-8,
 
     ):
@@ -944,7 +944,7 @@ class SolarRadiation(Perturbation):
         earth_times = propagator.loggers[0].time_history
         earth_traj = propagator.loggers[0].position_history
         self.earth_orbit_spline = sp.interpolate.make_interp_spline(earth_times.squeeze(), earth_traj.T, k=1)
-        
+
         # Compute the Julian days since the most recent aphelion.
         initial_date = initial_global_time.date
         initial_month = initial_date[3:5]
@@ -953,7 +953,7 @@ class SolarRadiation(Perturbation):
             initial_year = int(initial_date[6:])
         else:
             initial_year = int(initial_date[6:]) - 1
-        
+
         aphelion_time = time.Time(date=f"07/04/{initial_year}", time="12:00:00")
         self.initial_jd_since_aphelion = initial_global_time.julian_date - aphelion_time.julian_date
 
@@ -974,7 +974,7 @@ class SolarRadiation(Perturbation):
 
         Returns
         -------
-        acceleration : np.ndarray
+        acceleration : tuple[float, float, float]
             Current translational acceleration in PCI coordinates.
         """
 
