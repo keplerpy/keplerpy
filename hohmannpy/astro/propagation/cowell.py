@@ -2,12 +2,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-import scipy as sp
 
 from . import base
 
 if TYPE_CHECKING:
-    from .. import mission, perturbations
+    from .. import spacecraft, perturbations
 
 
 class CowellPropagator(base.Propagator):
@@ -26,17 +25,12 @@ class CowellPropagator(base.Propagator):
     def __init__(
             self,
             step_size: float = None,
-            absolute_solver_tol: float = 1e-15,
-            relative_solver_tol: float = 1e-12,
     ):
-        self.absolute_solver_tol = absolute_solver_tol
-        self.relative_solver_tol = relative_solver_tol
-
         super().__init__(step_size)
 
     def propagate(
             self,
-            satellites: dict[str, mission.Satellite],
+            satellites: dict[str, spacecraft.Satellite],
             final_time: float,
             perturbing_forces: list[perturbations.Perturbation] = None
     ):
@@ -50,68 +44,42 @@ class CowellPropagator(base.Propagator):
         super().propagate(satellites, final_time, perturbing_forces)
 
         # Get initial values used for propagation and set up logging capabilities.
-        initial_times = {}
-        initial_positions = {}
-        initial_velocities = {}
 
         for name, satellite in self.satellites.items():
-            initial_times[name] = satellite.orbit.time
-            initial_positions[name] = satellite.orbit.position.copy()
-            initial_velocities[name] = satellite.orbit.velocity.copy()
-
             for logger in satellite.loggers:
                 logger.setup(initial_orbit=satellite.orbit, timesteps=self.timesteps)
 
-        # Use scipy's solve_ivp() to numerically integrate the equations of motion.
-        for name, satellite in self.satellites.items():
-            orbit = satellite.orbit
-
-            initial_state = np.hstack((initial_positions[name], initial_velocities[name]))
-            eval_times = np.linspace(initial_times[name], final_time, self.timesteps + 1)
-            sol = sp.integrate.solve_ivp(
-                self.eom,
-                [initial_times[name], final_time],
-                initial_state,
-                t_eval=eval_times,
-                atol=self.absolute_solver_tol,
-                rtol=self.relative_solver_tol,
-                args=[orbit.grav_param]
-            )
-
-            # Extract propagation results.
-            for timestep in range(1, self.timesteps + 1):
+        # Begin the actual propagation loop
+        for timestep in range(1, self.timesteps + 1):
+            for name, satellite in self.satellites.items():
+                orbit = satellite.orbit
+                state = self.rk4(
+                    t0=orbit.time,
+                    y0=np.concatenate((orbit.position, orbit.velocity)),
+                    satellite=satellite,
+                )
                 orbit.time += self.step_size
+                orbit.position = np.array(state[:3])
+                orbit.velocity = np.array(state[3:])
 
-                # Extract position.
-                orbit.position = sol.y[0:3, timestep]
-
-                # Extract velocity.
-                orbit.velocity = sol.y[3:, timestep]
-
-                # Update orbital elements.
                 orbit.update_classical()
                 if orbit.track_equinoctial:
                     orbit.update_equinoctial()
 
-                # Save results.
-                self.log(timestep)
+            # Save results from this timestep.
+            self.log(timestep)
 
-    def eom(self, t, y, satellite):
-        """
-        Equation of motion passed to solve_ivp(). This is simply the two-body equation of motion (optionally with added
-        perturbing forces) put in first-order form.
+    def eom(
+            self,
+            t: float,
+            y: np.ndarray,
+            satellite: spacecraft.Satellite
+    ) -> np.ndarray:
+        radius = np.sqrt(y[0] ** 2 + y[1] ** 2 + y[2] ** 2)
 
-        :param t: Current time.
-        :param y: Current state, a (6, ) numpy array where indices 0-2 correspond to the (x, y, z) Cartesian position
-            and indices 4-5 the accompanying (x, y, z) Cartesian velocity.
-        """
-
-        # Standard two-body acceleration.
         y0_dot = y[3]
         y1_dot = y[4]
         y2_dot = y[5]
-
-        radius = np.sqrt(y[0] ** 2 + y[1] ** 2 + y[2] ** 2)
 
         y3_dot = -satellite.orbit.grav_param / radius ** 3 * y[0]
         y4_dot = -satellite.orbit.grav_param / radius ** 3 * y[1]
@@ -125,6 +93,17 @@ class CowellPropagator(base.Propagator):
                 y4_dot += y4_perturb
                 y5_dot += y5_perturb
 
-        return y0_dot, y1_dot, y2_dot, y3_dot, y4_dot, y5_dot
+        return np.array([y0_dot, y1_dot, y2_dot, y3_dot, y4_dot, y5_dot])
 
-    def integrate
+    def rk4(
+            self,
+            t0: float,
+            y0: np.ndarray,
+            satellite: spacecraft.Satellite
+    ) -> np.ndarray:
+        x1 = self.eom(t0, y0, satellite)
+        x2 = self.eom(t0 + self.step_size / 2, y0 + self.step_size / 2 * x1, satellite)
+        x3 = self.eom(t0 + self.step_size / 2, y0 + self.step_size / 2 * x2, satellite)
+        x4 = self.eom(t0 + self.step_size, y0 + self.step_size * x3, satellite)
+
+        return y0 + self.step_size / 6 * (x1 + 2 * x2 + 2 * x3 + x4)

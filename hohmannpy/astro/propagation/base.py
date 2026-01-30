@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from .. import perturbations, mission
+    from .. import perturbations, spacecraft
 
 
 class Propagator:
@@ -17,7 +17,7 @@ class Propagator:
 
     def propagate(
             self,
-            satellites: dict[str, mission.Satellite],
+            satellites: dict[str, spacecraft.Satellite],
             final_time: float,
             perturbing_forces: list[perturbations.Perturbation] = None
     ):

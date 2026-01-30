@@ -1,11 +1,15 @@
 from __future__ import annotations
 import importlib.resources
+from typing import TYPE_CHECKING
 
 import numpy as np
 import scipy as sp
 
 from ...dynamics import dcms
 from . import base
+
+if TYPE_CHECKING:
+    from .. import satellites
 
 
 # TODO: Deal with the singularity at the poles (division by a trig term which is zero at polar colatitudes).
@@ -63,14 +67,12 @@ class AtmosphericDrag(base.Perturbation):
 
     def __init__(
             self,
-            ballistic_coeff: float,
             gmst: float,
             solar_activity: str = "moderate",
             solver_tol: float = 1e-8
     ):
         super().__init__()
 
-        self.ballistic_coeff = ballistic_coeff
         self.initial_gmst = gmst
         self.solver_tol = solver_tol
 
@@ -101,7 +103,7 @@ class AtmosphericDrag(base.Perturbation):
                     )
         self.exosphere_bound = density_curve[-1, 0]
 
-    def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+    def evaluate(self, time: float, state: np.ndarray, satellite: satellites.Satellite) -> np.array:
         r"""
         Computes the perturbing acceleration using a model for the drag caused by the Earth's atmosphere.
 
@@ -143,9 +145,9 @@ class AtmosphericDrag(base.Perturbation):
         velocity = state[3:] - np.cross(np.array([0, 0, earth_rot]), state[:3])
 
         # Compute perturbing acceleration.
-        acceleration = -0.5 * 1 / self.ballistic_coeff * density * np.linalg.norm(velocity) * velocity
+        acceleration = -0.5 * 1 / satellite.ballistic_coeff * density * np.linalg.norm(velocity) * velocity
 
-        return acceleration[0], acceleration[1], acceleration[2]
+        return acceleration
 
     def compute_altitude(self, position: np.ndarray) -> float:
         """

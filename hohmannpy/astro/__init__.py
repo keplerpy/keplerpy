@@ -14,7 +14,8 @@ from .conversions import (
 )
 
 # Other libraries
-from .mission import Mission, Satellite
+from .mission import Mission
+from .spacecraft import Satellite
 from .orbit import Orbit
 from .time import Time
 # from .perturbations import (

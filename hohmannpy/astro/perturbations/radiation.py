@@ -1,11 +1,16 @@
 from __future__ import annotations
+from typing import TYPE_CHECKING
 
 import numpy as np
 import scipy as sp
 
+import hohmannpy.astro.satellites
 from ...dynamics import dcms
 from .. import propagation, logging, time, orbit
 from . import base
+
+if TYPE_CHECKING:
+    from .. import mission
 
 
 class SolarRadiation(base.Perturbation):
@@ -78,9 +83,6 @@ class SolarRadiation(base.Perturbation):
 
     def __init__(
             self,
-            mean_reflective_area: float,
-            reflectivity: float,
-            mass: float,
             initial_global_time: time.Time,
             final_global_time: time.Time,
             irradiance_scale_factor: float = 1,
@@ -89,10 +91,6 @@ class SolarRadiation(base.Perturbation):
 
     ):
         super().__init__()
-
-        self.mean_reflective_area = mean_reflective_area
-        self.reflectivity = reflectivity
-        self.mass = mass
         self.irradiance_scale_factor = irradiance_scale_factor
 
         # Initialize Earth's orbit.
@@ -134,7 +132,7 @@ class SolarRadiation(base.Perturbation):
         aphelion_time = time.Time(date=f"07/04/{initial_year}", time="12:00:00")
         self.initial_jd_since_aphelion = initial_global_time.julian_date - aphelion_time.julian_date
 
-    def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+    def evaluate(self, time: float, state: np.ndarray, satellite: hohmannpy.astro.satellites.Satellite) -> np.ndarray:
         r"""
         Computes the perturbing acceleration due to the Sun's radiation.
 
@@ -169,11 +167,11 @@ class SolarRadiation(base.Perturbation):
 
         # Compute the acceleration.
         acceleration = (
-            -solar_pressure * self.reflectivity * self.mean_reflective_area / self.mass
+            -solar_pressure * satellite.reflectivity * satellite.mean_reflective_area / satellite.mass
                 * position_sun_wrt_sat / np.linalg.norm(position_sun_wrt_sat)
         )
 
-        return acceleration[0], acceleration[1], acceleration[2]
+        return acceleration
 
     def compute_initial_true_anomaly(self, initial_global_time: time.Time, solver_tol: float):
         r"""

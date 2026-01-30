@@ -1,7 +1,11 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from .. import satellites
 
 
 class Perturbation(ABC):
@@ -19,7 +23,7 @@ class Perturbation(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+    def evaluate(self, time: float, state: np.ndarray, satellite: satellites.Satellite) -> np.ndarray:
         r"""
         Takes in the current time and planet-centered inertial state (the position and velocity) and returns the
         perturbing acceleration.

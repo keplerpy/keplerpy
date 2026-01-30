@@ -72,18 +72,7 @@ class Logger(ABC):
         pass
 
     @abstractmethod
-    def to_csv(self, file_path: str, fp_accuracy: float):
-        r"""
-        Converts all the history arrays to a human-readable CSV file.
-
-        Parameters
-        ----------
-        file_path : str
-            Where to save CSV to.
-        fp_accuracy : float
-            How many digits after the decimal to save.
-        """
-
+    def concatenate(self) -> np.ndarray:
         pass
 
 
@@ -129,18 +118,14 @@ class StateLogger(Logger):
         self.velocity_history[:, timestep] = current_orbit.velocity
         self.time_history[0, timestep] = current_orbit.time
 
-    def to_csv(self, file_path: str, fp_accuracy: float):
-        data = np.hstack((
-            self.time_history.T,
-            self.position_history.T,
-            self.velocity_history.T,
+    def concatenate(self) -> np.ndarray:
+        data = np.vstack((
+            self.time_history,
+            self.position_history,
+            self.velocity_history,
         ))
-        data_df = pd.DataFrame(data, columns=self.labels)
-        data_df.to_csv(
-            f"{file_path}.csv",
-            index=False,
-            float_format=f"%.{fp_accuracy}f"
-        )
+
+        return data.T
 
 
 class ClassicalElementsLogger(Logger):
@@ -229,27 +214,21 @@ class ClassicalElementsLogger(Logger):
         self.argl_history[0, timestep] = current_orbit.argl
         self.true_latitude_history[0, timestep] = current_orbit.true_latitude
 
-    def to_csv(self, file_path: str, fp_accuracy: float):
-        data = np.hstack((
-            self.sm_axis_history.T,
-            self.sl_rectum_history.T,
-            self.eccentricity_history.T,
-            self.inclination_history.T,
-            self.raan_history.T,
-            self.argp_history.T,
-            self.true_anomaly_history.T,
-            self.longp_history.T,
-            self.argl_history.T,
-            self.true_latitude_history.T,
+    def concatenate(self) -> np.ndarray:
+        data = np.vstack((
+            self.sm_axis_history,
+            self.sl_rectum_history,
+            self.eccentricity_history,
+            self.inclination_history,
+            self.raan_history,
+            self.argp_history,
+            self.true_anomaly_history,
+            self.longp_history,
+            self.argl_history,
+            self.true_latitude_history
         ))
 
-        data_df = pd.DataFrame(data, columns=self.labels)
-        data_df.to_csv(
-            f"{file_path}.csv",
-            index=False,
-            float_format=f"%.{fp_accuracy}f"
-        )
-
+        return data.T
 
 class EquinoctialElementsLogger(Logger):
     """
@@ -298,20 +277,15 @@ class EquinoctialElementsLogger(Logger):
         self.n_component1_history[0, timestep] = current_orbit.n_component1
         self.n_component2_history[0, timestep] = current_orbit.n_component2
 
-    def to_csv(self, file_path: str, fp_accuracy: float):
-        data = np.hstack((
-            self.e_component1_history.T,
-            self.e_component2_history.T,
-            self.n_component1_history.T,
-            self.n_component2_history.T,
+    def concatenate(self) -> np.ndarray:
+        data = np.vstack((
+            self.e_component1_history,
+            self.e_component2_history,
+            self.n_component1_history,
+            self.n_component2_history,
         ))
 
-        data_df = pd.DataFrame(data, columns=self.labels)
-        data_df.to_csv(
-            f"{file_path}.csv",
-            index=False,
-            float_format=f"%.{fp_accuracy}f"
-        )
+        return data.T
 
 
 class EccentricAnomalyLogger(Logger):
@@ -339,17 +313,8 @@ class EccentricAnomalyLogger(Logger):
     def log(self, current_orbit: orbit.Orbit, timestep: int):
         self.eccentric_anomaly_history[0, timestep] = current_orbit.eccentric_anomaly
 
-    def to_csv(self, file_path: str, fp_accuracy: float):
-        data = np.hstack((
-            self.eccentric_anomaly_history.T,
-        ))
-
-        data_df = pd.DataFrame(data, columns=self.labels)
-        data_df.to_csv(
-            f"{file_path}.csv",
-            index=False,
-            float_format=f"%.{fp_accuracy}f"
-        )
+    def concatenate(self) -> np.ndarray:
+        return self.eccentric_anomaly_history.T
 
 
 class UniversalVariableLogger(Logger):
@@ -360,7 +325,7 @@ class UniversalVariableLogger(Logger):
     Attributes
     ----------
     universal_variable_history : np.ndarray
-        (1, N) array of the universal variable over time..
+        (1, N) array of the universal variable over time.
     stumpff_param_history : np.ndarray
         (1, N) array of the Stumpff parameter over time. Units: :math:`rad`.
     """
@@ -384,15 +349,10 @@ class UniversalVariableLogger(Logger):
         self.universal_variable_history[0, timestep] = current_orbit.universal_variable
         self.stumpff_param_history[0, timestep] = current_orbit.stumpff_param
 
-    def to_csv(self, file_path: str, fp_accuracy: float):
-        data = np.hstack((
-            self.universal_variable_history.T,
-            self.stumpff_param_history.T,
+    def concatenate(self) -> np.ndarray:
+        data = np.vstack((
+            self.universal_variable_history,
+            self.stumpff_param_history,
         ))
 
-        data_df = pd.DataFrame(data, columns=self.labels)
-        data_df.to_csv(
-            f"{file_path}.csv",
-            index=False,
-            float_format=f"%.{fp_accuracy}f"
-        )
+        return data.T

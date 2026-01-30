@@ -7,7 +7,7 @@ import scipy as sp
 from . import base
 
 if TYPE_CHECKING:
-    from .. import mission, perturbations
+    from .. import spacecraft, perturbations
 
 
 class KeplerPropagator(base.Propagator):
@@ -29,7 +29,7 @@ class KeplerPropagator(base.Propagator):
 
     def propagate(
             self,
-            satellites: dict[str, mission.Satellite],
+            satellites: dict[str, spacecraft.Satellite],
             final_time: float,
             perturbing_forces: list[perturbations.Perturbation] = None
     ):

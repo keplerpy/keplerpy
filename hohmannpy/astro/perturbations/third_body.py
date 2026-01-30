@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Union
+from typing import Union, TYPE_CHECKING
 import copy
 
 import numpy as np
@@ -8,6 +8,9 @@ import scipy as sp
 from ...dynamics import dcms
 from .. import propagation, logging, time, orbit
 from . import base
+
+if TYPE_CHECKING:
+    from .. import spacecraft
 
 
 class ThirdBodyGravity(base.Perturbation):
@@ -128,7 +131,7 @@ class ThirdBodyGravity(base.Perturbation):
                 return np.array([0, 0, 0])
             self.cb_orbit_spline = dummy_spline
 
-    def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+    def evaluate(self, time: float, state: np.ndarray, satellite: satellites.Satellite) -> np.ndarray:
         """
         Computes the perturbing acceleration due to the third body.
 
@@ -180,7 +183,7 @@ class ThirdBodyGravity(base.Perturbation):
                 )
             )
 
-        return acceleration[0], acceleration[1], acceleration[2]
+        return acceleration
 
 
 class LunarGravity(ThirdBodyGravity):
@@ -327,42 +330,3 @@ class SolarGravity(ThirdBodyGravity):
         def inverted_spline(x):
             return -tb_orbit_spline(x)
         self.tb_orbit_spline = inverted_spline
-
-    def compute_initial_true_anomaly(self, initial_global_time: time.Time, solver_tol: float):
-        r"""
-        Calculates the true anomaly of the Earth at the initial date.
-
-        Parameters
-        ----------
-        initial_global_time : time.Time
-            Gregorian date and UT1 time at which the Earth is initially located.
-        solver_tol : float
-            Error tolerance to use when solving Kepler's equation.
-
-        Returns
-        -------
-        initial_true_anomaly : float
-            True anomaly of the earth corresponding to ``initial_global_time``.
-        """
-
-        earth_mean_motion = np.deg2rad(0.98560028)
-        earth_eccentricity = 0.0167086
-        j2000_mean_anomaly = np.deg2rad(357.5277233)
-        j2000_julian_time = 2451545
-
-        # Compute the initial mean anomaly wrt. J2000 and then solve Kepler's equation for the corresponding initial
-        # eccentric anomaly.
-        initial_mean_anomaly = (
-            j2000_mean_anomaly
-                + earth_mean_motion * ((initial_global_time.julian_date - j2000_julian_time) * 86400)
-        ) % 2 * np.pi
-
-        eq = lambda x: initial_mean_anomaly - x + earth_eccentricity * np.sin(x)
-        initial_eccentric_anomaly = sp.optimize.newton(eq, initial_mean_anomaly, tol=solver_tol)
-
-        # Use Gauss' equation to compute the initial eccentric anomaly to the initial true anomaly.s
-        return  (
-            2 * np.arctan(
-                np.sqrt((1 + earth_eccentricity) / (1 - earth_eccentricity)) * np.tan(initial_eccentric_anomaly / 2)
-            )
-        )

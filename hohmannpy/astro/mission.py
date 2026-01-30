@@ -1,18 +1,35 @@
 from __future__ import annotations
-
 import copy
 
-import numpy as np
 import pandas as pd
+import numpy as np
 
-from . import propagation, orbit, perturbations, time, logging
+from . import propagation, perturbations, time, logging, spacecraft
 from ..ui import rendering
 
 
 class Mission:
+    """
+    Master class for all orbital simulations.
+
+    Contains the ability to propagate the orbits of a set of :class:`~hohmannpy.astro.Satellite` and then render and
+    propagate the results.
+
+    Parameters
+    ----------
+    satellites : list of :class:`~hohmannpy.astro.Satellite`
+        List of satellites whose orbits the Mission will propagate.
+    initial_global_time : time.Time
+        The Gregorian date and UT1 time to start the mission at.
+    initial_global_time : time.Time
+        The Gregorian date and UT1 time to end the mission at.
+    loggers : list[:class:`~hohmannpy.astro.Logger`]
+        Loggers determine which data to record for each satellite during propagation.
+    """
+
     def __init__(
             self,
-            satellites: list[Satellite],
+            satellites: list[spacecraft.Satellite],
             initial_global_time: time.Time,
             final_global_time: time.Time,
             loggers: list[logging.Logger] = None,
@@ -82,34 +99,24 @@ class Mission:
             )
         engine.render()
 
+    def save(self, target_directory: str, fp_accuracy: float):
+        for name, satellite in self.satellites.items():
+            data = None
+            labels = []
 
-class Satellite:
-    ballistic_coeff: float | None
+            for logger in satellite.loggers:
+                local_data = logger.concatenate()
+                local_labels = logger.labels
 
-    def __init__(
-            self,
-            name: str,
-            starting_orbit: orbit.Orbit,
-            mass: float = None,
-            ballistic_coeff: float = None,
-            mean_reflective_area: float = None,
-            reflectivity: float = None,
-            color: str = "#FF073A"
-    ):
-        self.name = name
-        self.starting_orbit = starting_orbit
-        self.mass = mass
-        self.ballistic_coeff = ballistic_coeff
-        self.mean_reflective_area = mean_reflective_area
-        self.reflectivity = reflectivity
-        self.color = color
+                if data is None:
+                    data = local_data
+                else:
+                    data = np.hstack((data, local_data))
+                labels.extend(local_labels)
 
-        self.orbit = copy.deepcopy(starting_orbit)  # This will be updated over time by the propagator.
-        self.loggers = None  # Filled in by the __init__() of Mission.
-
-    def __getattr__(self, name):
-        if self.loggers is not None:
-            for logger in self.loggers:
-                if hasattr(logger, name):
-                    return getattr(logger, name)
-        raise AttributeError(f"This satellite has not logged data for {self.name}.")
+            data_df = pd.DataFrame(data, columns=labels)
+            data_df.to_csv(
+                f"{target_directory}\\{name}.csv",
+                index=False,
+                float_format=f"%.{fp_accuracy}f"
+            )

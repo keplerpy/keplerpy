@@ -1,11 +1,15 @@
 from __future__ import annotations
 import importlib.resources
+from typing import TYPE_CHECKING
 
 import numpy as np
 import scipy as sp
 
 from ...dynamics import dcms
 from . import base
+
+if TYPE_CHECKING:
+    from .. import satellites
 
 
 # TODO: Deal with the singularity at the poles (division by a trig term which is zero at polar colatitudes).
@@ -66,7 +70,7 @@ class NonSphericalEarth(base.Perturbation):
         with importlib.resources.files("hohmannpy.resources").joinpath("egm84_s_coeffs.csv").open() as f:
             self.s_coeffs = np.loadtxt(f, delimiter=",")  # n rows, m columns, from [0, 180]
 
-    def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+    def evaluate(self, time: float, state: np.ndarray, satellite: satellites.Satellite) -> np.ndarray:
         r"""
         Computes the perturbing acceleration using a geopotential model of the Earth's gravitational field.
 
@@ -142,7 +146,7 @@ class NonSphericalEarth(base.Perturbation):
         earth_2_inertial_dcm = dcms.euler_2_dcm(gmst, 3).T
         acceleration = earth_2_inertial_dcm @ acceleration
 
-        return acceleration[0], acceleration[1], acceleration[2]
+        return acceleration
 
     def compute_colat_and_long(self, time, position):
         r"""
@@ -212,7 +216,7 @@ class J2(base.Perturbation):
 
         self.initial_gmst = gmst
 
-    def evaluate(self, time: float, state: np.ndarray) -> tuple[float, float, float]:
+    def evaluate(self, time: float, state: np.ndarray, satellite: satellites.Satellite) -> np.ndarry:
         r"""
         Computes the perturbing acceleration due to the J2 effect.
 
@@ -249,4 +253,4 @@ class J2(base.Perturbation):
 
         acceleration = inertial_2_earth_dcm.T @ acceleration
 
-        return acceleration[0], acceleration[1], acceleration[2]
+        return acceleration
