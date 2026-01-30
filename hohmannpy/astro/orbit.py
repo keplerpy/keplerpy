@@ -97,6 +97,15 @@ class Orbit:
         1-component of the project of the nodal vector into the equinoctial plane.
     n_component2 : float
         2-component of the project of the eccentricity vector into the equinoctial plane.
+    eccentric_anomaly: float
+        Eccentric anomaly of the orbit. Not used by default unless orbit is propagated using
+        :class:`~hohmannpy.astro.KeplerPropagator`.
+    stumpff_param: float
+        Stumpff parameter of the orbit. Not used by default unless orbit is propagated using
+        :class:`~hohmannpy.astro.UniversalVariablePropagator`.
+    universal_variable: float
+        Universal variable of the orbit. Not used by default unless orbit is propagated using
+        :class:`~hohmannpy.astro.UniversalVariablePropagator`.
     track_equinoctial : bool
         Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
         classical orbital elements (as well as their degenerate cases) are tracked.
@@ -126,6 +135,11 @@ class Orbit:
             self.update_classical()
             if self.track_equinoctial:
                 self.update_equinoctial()
+
+        # Initialize other attributes which are propagator-specific.
+        self.eccentric_anomaly = None
+        self.stumpff_param = None
+        self.universal_variable = None
 
     # ---------------------------------
     # ALTERNATE INSTANTIATION FUNCTIONS

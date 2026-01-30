@@ -14,12 +14,12 @@ from .conversions import (
 )
 
 # Other libraries
-from .mission import Mission
+from .mission import Mission, Satellite
 from .orbit import Orbit
 from .time import Time
-from .perturbations import (
-    Perturbation, NonSphericalEarth, AtmosphericDrag, J2, ThirdBodyGravity, LunarGravity, SolarGravity, SolarRadiation
-)
+# from .perturbations import (
+#     Perturbation, NonSphericalEarth, AtmosphericDrag, J2, ThirdBodyGravity, LunarGravity, SolarGravity, SolarRadiation
+# )
 from .logging import (
     Logger, StateLogger, ClassicalElementsLogger,
     EquinoctialElementsLogger, EccentricAnomalyLogger, UniversalVariableLogger

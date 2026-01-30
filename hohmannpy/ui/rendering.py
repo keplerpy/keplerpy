@@ -410,7 +410,7 @@ class DynamicRenderEngine(RenderEngine):
         self.old_speed_factor = 0
 
         # Generate the orbital spline.
-        self.orbit_spline = sp.interpolate.make_interp_spline(times.squeeze(), traj.T / 1000, k=3)
+        self.orbit_spline = sp.interpolate.make_interp_spline(times.squeeze(), traj.T / 1000, k=1)
 
         # Rotate the Earth to start at the correct GMST, this overwrites any base-class rotation.
         self.base_earth_rotation = la.quat_from_euler(

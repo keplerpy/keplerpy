@@ -22,7 +22,7 @@ class AtmosphericDrag(base.Perturbation):
     Two additional model simplifications are made. The use of a constant ballistic coefficient also simplifies the model
     by removing drag-attitude dependence. Also, computing geodetic latitude (which is needed to get an accurate
     altitude measurement) involves knowing the GMST (the angle between the Greenwich meridian and Vernal equinox) of the
-    Earth. For simplicity, the GMST is located accurately (including precession of the Vernal equinox) at the start of
+    Earth. For simplicity the GMST is located accurately (including precession of the Vernal equinox) at the start of
     the simulation. However, for the length of propagation it is said to simply rotate at the Earth's mean rotation
     rate, ignoring precession effects.
 

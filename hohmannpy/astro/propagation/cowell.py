@@ -1,8 +1,13 @@
 from __future__ import annotations
-from . import base
+from typing import TYPE_CHECKING
+
 import numpy as np
 import scipy as sp
-from .. import logging
+
+from . import base
+
+if TYPE_CHECKING:
+    from .. import mission, perturbations
 
 
 class CowellPropagator(base.Propagator):
@@ -20,7 +25,6 @@ class CowellPropagator(base.Propagator):
 
     def __init__(
             self,
-            loggers: list[logging.Logger] = None,
             step_size: float = None,
             absolute_solver_tol: float = 1e-15,
             relative_solver_tol: float = 1e-12,
@@ -28,12 +32,14 @@ class CowellPropagator(base.Propagator):
         self.absolute_solver_tol = absolute_solver_tol
         self.relative_solver_tol = relative_solver_tol
 
-        if loggers is None:  # Default loggers.
-            loggers = [logging.StateLogger()]
+        super().__init__(step_size)
 
-        super().__init__(loggers, step_size)
-
-    def propagate(self):
+    def propagate(
+            self,
+            satellites: dict[str, mission.Satellite],
+            final_time: float,
+            perturbing_forces: list[perturbations.Perturbation] = None
+    ):
         """
         The procedure for this style of propagation is as follows:
             1) Save initial position and velocity.
@@ -41,46 +47,56 @@ class CowellPropagator(base.Propagator):
             3) Extract the results of this function and save them.
         """
 
-        # Get initial values used for propagation.
-        initial_time = self.orbit.time
-        initial_position = self.orbit.position.copy()
-        initial_velocity = self.orbit.velocity.copy()
+        super().propagate(satellites, final_time, perturbing_forces)
 
-        # Set up Loggers.
-        for logger in self.loggers:
-            logger.setup(self)
+        # Get initial values used for propagation and set up logging capabilities.
+        initial_times = {}
+        initial_positions = {}
+        initial_velocities = {}
+
+        for name, satellite in self.satellites.items():
+            initial_times[name] = satellite.orbit.time
+            initial_positions[name] = satellite.orbit.position.copy()
+            initial_velocities[name] = satellite.orbit.velocity.copy()
+
+            for logger in satellite.loggers:
+                logger.setup(initial_orbit=satellite.orbit, timesteps=self.timesteps)
 
         # Use scipy's solve_ivp() to numerically integrate the equations of motion.
-        initial_state = np.hstack((initial_position, initial_velocity))
-        eval_times = np.linspace(initial_time, self.final_time, self.timesteps + 1)
-        sol = sp.integrate.solve_ivp(
-            self.eom,
-            [initial_time, self.final_time],
-            initial_state,
-            t_eval=eval_times,
-            atol=self.absolute_solver_tol,
-            rtol=self.relative_solver_tol,
-        )
+        for name, satellite in self.satellites.items():
+            orbit = satellite.orbit
 
-        # Extract propagation results.
-        for timestep in range(1, self.timesteps + 1):
-            self.orbit.time += self.step_size
+            initial_state = np.hstack((initial_positions[name], initial_velocities[name]))
+            eval_times = np.linspace(initial_times[name], final_time, self.timesteps + 1)
+            sol = sp.integrate.solve_ivp(
+                self.eom,
+                [initial_times[name], final_time],
+                initial_state,
+                t_eval=eval_times,
+                atol=self.absolute_solver_tol,
+                rtol=self.relative_solver_tol,
+                args=[orbit.grav_param]
+            )
 
-            # Extract position.
-            self.orbit.position = sol.y[0:3, timestep]
+            # Extract propagation results.
+            for timestep in range(1, self.timesteps + 1):
+                orbit.time += self.step_size
 
-            # Extract velocity.
-            self.orbit.velocity = sol.y[3:, timestep]
+                # Extract position.
+                orbit.position = sol.y[0:3, timestep]
 
-            # Update orbital elements.
-            self.orbit.update_classical()
-            if self.orbit.track_equinoctial:
-                self.orbit.update_equinoctial()
+                # Extract velocity.
+                orbit.velocity = sol.y[3:, timestep]
 
-            # Save results.
-            self.log(timestep)
+                # Update orbital elements.
+                orbit.update_classical()
+                if orbit.track_equinoctial:
+                    orbit.update_equinoctial()
 
-    def eom(self, t, y):
+                # Save results.
+                self.log(timestep)
+
+    def eom(self, t, y, grav_param):
         """
         Equation of motion passed to solve_ivp(). This is simply the two-body equation of motion (optionally with added
         perturbing forces) put in first-order form.
@@ -97,13 +113,13 @@ class CowellPropagator(base.Propagator):
 
         radius = np.sqrt(y[0] ** 2 + y[1] ** 2 + y[2] ** 2)
 
-        y3_dot = -self.orbit.grav_param / radius ** 3 * y[0]
-        y4_dot = -self.orbit.grav_param / radius ** 3 * y[1]
-        y5_dot = -self.orbit.grav_param / radius ** 3 * y[2]
+        y3_dot = -grav_param / radius ** 3 * y[0]
+        y4_dot = -grav_param / radius ** 3 * y[1]
+        y5_dot = -grav_param / radius ** 3 * y[2]
 
         # Perturbing forces.
-        if self.perturbations is not None:
-            for perturbing_force in self.perturbations:
+        if self.perturbing_forces is not None:
+            for perturbing_force in self.perturbing_forces:
                 y3_perturb, y4_perturb, y5_perturb = perturbing_force.evaluate(t, y)
                 y3_dot += y3_perturb
                 y4_dot += y4_perturb

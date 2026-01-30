@@ -183,7 +183,7 @@ class ThirdBodyGravity(base.Perturbation):
         return acceleration[0], acceleration[1], acceleration[2]
 
 
-class LunarGravity(base.ThirdBodyGravity):
+class LunarGravity(ThirdBodyGravity):
     r"""
     Perturbation caused by the Moon's gravity.
 
@@ -252,7 +252,7 @@ class LunarGravity(base.ThirdBodyGravity):
         )
 
 
-class SolarGravity(base.ThirdBodyGravity):
+class SolarGravity(ThirdBodyGravity):
     r"""
     Perturbation caused by the Sun's gravity.
 
