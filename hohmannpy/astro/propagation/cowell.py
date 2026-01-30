@@ -96,7 +96,7 @@ class CowellPropagator(base.Propagator):
                 # Save results.
                 self.log(timestep)
 
-    def eom(self, t, y, grav_param):
+    def eom(self, t, y, satellite):
         """
         Equation of motion passed to solve_ivp(). This is simply the two-body equation of motion (optionally with added
         perturbing forces) put in first-order form.
@@ -113,9 +113,9 @@ class CowellPropagator(base.Propagator):
 
         radius = np.sqrt(y[0] ** 2 + y[1] ** 2 + y[2] ** 2)
 
-        y3_dot = -grav_param / radius ** 3 * y[0]
-        y4_dot = -grav_param / radius ** 3 * y[1]
-        y5_dot = -grav_param / radius ** 3 * y[2]
+        y3_dot = -satellite.orbit.grav_param / radius ** 3 * y[0]
+        y4_dot = -satellite.orbit.grav_param / radius ** 3 * y[1]
+        y5_dot = -satellite.orbit.grav_param / radius ** 3 * y[2]
 
         # Perturbing forces.
         if self.perturbing_forces is not None:
@@ -126,3 +126,5 @@ class CowellPropagator(base.Propagator):
                 y5_dot += y5_perturb
 
         return y0_dot, y1_dot, y2_dot, y3_dot, y4_dot, y5_dot
+
+    def integrate

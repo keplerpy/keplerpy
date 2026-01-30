@@ -66,7 +66,7 @@ class RenderEngine:
 
     def __init__(
             self,
-            traj: np.ndarray,
+            satellites: dict[str, astro.Satellite],
             draw_basis: bool = False,
             draw_skybox: bool = True,
     ):
@@ -84,8 +84,10 @@ class RenderEngine:
         self.earth = self.create_earth()
         self.scene.add(self.earth)
 
-        self.orbit = self.create_orbit(traj)
-        self.scene.add(self.orbit)
+        self.orbits = []
+        for satellite in satellites.values():
+            self.orbits.append(self.create_orbit(satellite.position_history, satellite.color))
+            self.scene.add(self.orbits[-1])
 
         if draw_basis:  # Optionally display an ECI basis.
             x_axis, y_axis, z_axis = self.create_basis(length=8000)
@@ -293,7 +295,7 @@ class RenderEngine:
 
         return gfx.Line(x_axis, x_material), gfx.Line(y_axis, y_material), gfx.Line(z_axis, z_material)
 
-    def create_orbit(self, traj: np.ndarray):
+    def create_orbit(self, traj: np.ndarray, color: str):
         r"""
         Method which instantiates the orbit object.
 
@@ -312,7 +314,7 @@ class RenderEngine:
         orbit = traj.T / 1000  # Scale to engine units (km).
         orbit = orbit.astype(np.float32)  # Data type needed by gfx.Geometry.
 
-        return gfx.Line(gfx.Geometry(positions=orbit), gfx.LineMaterial(thickness=2, color=gfx.Color("#FF073A")))
+        return gfx.Line(gfx.Geometry(positions=orbit), gfx.LineMaterial(thickness=2, color=gfx.Color(color)))
 
 
 class DynamicRenderEngine(RenderEngine):
@@ -392,36 +394,39 @@ class DynamicRenderEngine(RenderEngine):
 
     def __init__(
             self,
-            traj: np.ndarray,
-            times: np.ndarray,
+            satellites: dict[str, astro.Satellite],
+            sim_length: float,
             initial_global_time: astro.Time,
             draw_basis: bool = False,
             draw_skybox: bool = True,
     ):
         # Base installation.
-        super().__init__(traj, draw_basis, draw_skybox)
+        super().__init__(satellites, draw_basis, draw_skybox)
 
         self.initial_global_time = initial_global_time
         self.initial_local_time = None  # Set during initial animation.
         self.local_time = None  # Set during initial animation.
         self.sim_time = 0
-        self.final_sim_time = times[0, -1]
+        self.final_sim_time = sim_length
         self.speed_factor = 100
         self.old_speed_factor = 0
 
         # Generate the orbital spline.
-        self.orbit_spline = sp.interpolate.make_interp_spline(times.squeeze(), traj.T / 1000, k=1)
+        self.orbit_splines = []
+        self.satellites = []
+        for satellite in satellites.values():
+            self.orbit_splines.append(
+                sp.interpolate.make_interp_spline(satellite.time_history.squeeze(), satellite.position_history.T / 1000, k=1)
+            )
+            self.satellites.append(self.create_satellite(satellite.color))
+            self.scene.add(self.satellites[-1])
+            self.satellites[-1].local.position = self.orbit_splines[-1](0)
 
         # Rotate the Earth to start at the correct GMST, this overwrites any base-class rotation.
         self.base_earth_rotation = la.quat_from_euler(
             (np.pi / 2, self.initial_global_time.gmst, 0), order="XYZ"
         )  # Rotate Earth since texture is 90 deg offset about x-axis, then offset terminator in new body frame.
         self.earth.local.rotation = self.base_earth_rotation
-
-        # Add satellite.
-        self.satellite = self.create_satellite()
-        self.scene.add(self.satellite)
-        self.satellite.local.position = self.orbit_spline(0)
 
         # Add additional event handling.
         self.canvas.add_event_handler(self.time_event_handler, "key_down")
@@ -449,7 +454,8 @@ class DynamicRenderEngine(RenderEngine):
             la.quat_from_axis_angle((0, 1, 0), self.sim_time * earth_rot),
         )
 
-        self.satellite.local.position = self.orbit_spline(self.sim_time)
+        for i in range(len(self.satellites)):
+            self.satellites[i].local.position = self.orbit_splines[i](self.sim_time)
 
         super().animate()
 
@@ -498,7 +504,7 @@ class DynamicRenderEngine(RenderEngine):
     # --------------
     # OBJECT METHODS
     # --------------
-    def create_satellite(self):
+    def create_satellite(self, color: str):
         r"""
         Method which instantiates the satellite object.
 
@@ -508,7 +514,7 @@ class DynamicRenderEngine(RenderEngine):
            Satellite object which moves along the orbit.
         """
 
-        sat_mat =  gfx.MeshPhongMaterial(color=gfx.Color("#FF073A"), flat_shading=True)
+        sat_mat =  gfx.MeshPhongMaterial(color=gfx.Color(color), flat_shading=True)
         satellite = gfx.Mesh(
             gfx.sphere_geometry(radius=300, width_segments=64, height_segments=32),
             sat_mat

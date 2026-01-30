@@ -106,6 +106,9 @@ class Orbit:
     universal_variable: float
         Universal variable of the orbit. Not used by default unless orbit is propagated using
         :class:`~hohmannpy.astro.UniversalVariablePropagator`.
+    inverse_sm_axis: float
+        Inverse of the semi-major axis of the orbit. Used by :class:`~hohmannpy.astro.UniversalVariablePropagator` so
+        that it can handle parabolic orbits.
     track_equinoctial : bool
         Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
         classical orbital elements (as well as their degenerate cases) are tracked.
@@ -140,6 +143,7 @@ class Orbit:
         self.eccentric_anomaly = None
         self.stumpff_param = None
         self.universal_variable = None
+        self.inverse_sm_axis = None
 
     # ---------------------------------
     # ALTERNATE INSTANTIATION FUNCTIONS

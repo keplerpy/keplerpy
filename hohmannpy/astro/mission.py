@@ -69,17 +69,16 @@ class Mission:
             final_time=(self.final_global_time.julian_date - self.initial_global_time.julian_date) * 86400,
         )
 
-    # TODO: Temp function.
     def display(self):
         if self.display_flag == "dynamic":
             engine = rendering.DynamicRenderEngine(
-                traj=self.satellites["0"].position_history,
-                times=self.satellites["0"].time_history,
+                satellites=self.satellites,
+                sim_length=(self.final_global_time.julian_date - self.initial_global_time.julian_date) * 86400,
                 initial_global_time=self.initial_global_time,
             )
         else:
             engine = rendering.RenderEngine(
-                traj=self.traj,
+                satellites=self.satellites,
             )
         engine.render()
 
@@ -94,7 +93,8 @@ class Satellite:
             mass: float = None,
             ballistic_coeff: float = None,
             mean_reflective_area: float = None,
-            reflectivity: float = None
+            reflectivity: float = None,
+            color: str = "#FF073A"
     ):
         self.name = name
         self.starting_orbit = starting_orbit
@@ -102,6 +102,7 @@ class Satellite:
         self.ballistic_coeff = ballistic_coeff
         self.mean_reflective_area = mean_reflective_area
         self.reflectivity = reflectivity
+        self.color = color
 
         self.orbit = copy.deepcopy(starting_orbit)  # This will be updated over time by the propagator.
         self.loggers = None  # Filled in by the __init__() of Mission.
