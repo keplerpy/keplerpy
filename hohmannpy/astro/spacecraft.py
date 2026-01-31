@@ -1,6 +1,6 @@
 from __future__ import annotations
 import copy
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import scipy as sp
@@ -8,19 +8,78 @@ import scipy as sp
 from . import orbit
 
 if TYPE_CHECKING:
-    from . import time
+    from . import time, logging
 
 
 class Satellite:
+    r"""
+    Basic spacecraft whose motion can be simulated using :class:`~hohmannpy.astro.Mission`.
+
+    Parameters
+    ----------
+    name : str
+        Unique identifier of the spacecraft. Repeats are not allowed.
+    starting_orbit : :class:`~hohmannpy.astro.Orbit`
+        The orbit the spacecraft is in at the start of the perturbation.
+    color: str
+        The color of the orbit and spacecraft to display in renderings.
+    mass: float
+        Mass of the spacecraft in :math:`kg`. Needed for missions where the perturbation
+        :class:`~hohmannpy.astro.SolarRadiation` is enabled.
+    ballistic_coeff: float
+        Dimensionless parameter proportional to the drag effects experienced by a spacecraft. Needed for missions where
+        the perturbation :class:`~hohmannpy.astro.AtmosphericDrag` is enabled.
+    mean_reflective_area : float
+        Average area exposed to solar radiation pressure in :math:`m^2`. Needed for missions where the perturbation
+        :class:`~hohmannpy.astro.SolarRadiation` is enabled.
+    reflectivity : float
+        Dimensionless parameter proportional to how much solar radiation is reflected by the ``mean_reflective_area``.
+        0 = transparent, 1 = full absorption, and 2 = full reflection. Needed for missions where the perturbation
+        :class:`~hohmannpy.astro.SolarRadiation` is enabled.
+
+    Attributes
+    ----------
+    name : str
+        Unique identifier of the spacecraft. Repeats are not allowed.
+    starting_orbit : :class:`~hohmannpy.astro.Orbit`
+        The orbit the spacecraft is in at the start of the perturbation.
+    orbit : :class:`~hohmannpy.astro.Orbit`
+        Current orbit of the spacecraft. Starts as a deep copy of the ``starting_orbit`` and then is updated on each
+        timestep during propagation.
+    loggers: list[:class:`~hohmannpy.astro.Logger`]
+        Loggers which record data on each timestep during propagation. This attribute is initially set to ``None`` and
+        is filled in by the ``__init__()`` of ``Mission``.
+    color: str
+        The color of the orbit and spacecraft to display in renderings.
+    mass: float
+        Mass of the spacecraft in :math:`kg`. Needed for missions where the perturbation
+        :class:`~hohmannpy.astro.SolarRadiation` is enabled.
+    ballistic_coeff: float
+        Dimensionless parameter proportional to the drag effects experienced by a spacecraft. Needed for missions where
+        the perturbation :class:`~hohmannpy.astro.AtmosphericDrag` is enabled.
+    mean_reflective_area : float
+        Average area exposed to solar radiation pressure in :math:`m^2`. Needed for missions where the perturbation
+        :class:`~hohmannpy.astro.SolarRadiation` is enabled.
+    reflectivity : float
+        Dimensionless parameter proportional to how much solar radiation is reflected by the ``mean_reflective_area``.
+        0 = transparent, 1 = full absorption, and 2 = full reflection. Needed for missions where the perturbation
+        :class:`~hohmannpy.astro.SolarRadiation` is enabled.
+
+    Notes
+    -----
+    Once a satellite's orbit is propagator, the recorded data (attributes) of any ``Logger`` attached to this satellite
+    can be access from the satellite using :meth:`__getattr_()`.
+    """
+
     def __init__(
             self,
             name: str,
             starting_orbit: orbit.Orbit,
+            color: str = "#FF073A",
             mass: float = None,
             ballistic_coeff: float = None,
             mean_reflective_area: float = None,
             reflectivity: float = None,
-            color: str = "#FF073A"
     ):
         self.name = name
         self.starting_orbit = starting_orbit
@@ -30,10 +89,14 @@ class Satellite:
         self.reflectivity = reflectivity
         self.color = color
 
-        self.orbit = copy.deepcopy(starting_orbit)  # This will be updated over time by the propagator.
-        self.loggers = None  # Filled in by the __init__() of Mission.
+        self.orbit: orbit.Orbit = copy.deepcopy(starting_orbit)  # This will be updated over time by the propagator.
+        self.loggers: Any[list[logging.Logger], None] = None  # Filled in by the __init__() of Mission.
 
     def __getattr__(self, name):
+        r"""
+        Access data from ``Loggers`` assigned to this object as if they were assigned to this class.
+        """
+
         if self.loggers is not None:
             for logger in self.loggers:
                 if hasattr(logger, name):
@@ -42,6 +105,12 @@ class Satellite:
 
 
 class Moon(Satellite):
+    r"""
+    Special "spacecraft" which represents the Earth's moon.
+
+    Used by :class:`~hohmannpy.astro.LunarGravity` for simulating lunar gravity third-body perturbing effects.
+    """
+
     def __init__(self, initial_true_anomaly: float):
         name = "Moon"
         starting_orbit = orbit.Orbit.from_classical_elements(
@@ -56,6 +125,13 @@ class Moon(Satellite):
 
 
 class Earth(Satellite):
+    r"""
+    Special "spacecraft" which represents the Earth. Alternatively, can represent the Sun orbiting the Earth if you
+    invert the position vector.
+
+    Used by :class:`~hohmannpy.astro.SolarGravity` for simulating solar gravity third-body perturbing effects.
+    """
+
     def __init__(self, initial_global_time: time.Time, solver_tol: float):
         name = "Earth"
 

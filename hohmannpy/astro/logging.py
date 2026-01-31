@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
 
 if TYPE_CHECKING:
     from . import orbit
@@ -11,19 +10,8 @@ if TYPE_CHECKING:
 
 class Logger(ABC):
     r"""
-    A logger is used to store data regarding :class:`~hohmannpy.astro.Orbit` generated on each timestep by
+    A logger is used to store data regarding a :class:`~hohmannpy.astro.Orbit` generated on each timestep by
     :class:`~hohmannpy.astro.Propagator` . :meth:`~hohmannpy.astro.Propagator.propagate()`.
-
-    This is done by inserting values into a set of ``np.ndarray``'s each of size (M, N) where M is the length of the
-    value being logged (if it's a vector) and N is the number of timesteps propagation, and hence logging, occurs for at
-    each timestep.
-
-    One or more loggers are passed to a propagator during startup as attributes of :class:`~hohmannpy.astro.Satellite`.
-    However, the ``__init__()`` for each logger is empty as the necessary information (such as the initial value of each
-    variable being logged on the first timestep) to begin logging is not known until
-    :class:`~hohmannpy.astro.Propagator` . :meth:`~hohmannpy.astro.Propagator.propagate()` is called. At this point the
-    local :meth:`setup()` is also called to prepare the logger for logging. Then, as the propagator steps through the
-    propagation timesteps :meth:`log()` is called on each of them to perform the array indexing mentioned previously.
     """
 
     def __init__(self):
@@ -51,7 +39,7 @@ class Logger(ABC):
         -----
         Can't call this till after the initial values of propagator-unique attributes, such as ``eccentric_anomaly``
         for :class:`~hohmannpy.astro.KeplerPropagator`, have been set. This is typically towards the start of a
-        propagators' ``propagate()`` method.
+        propagators' ``propagate()`` method. This is why ``setup()`` is seperated from ``__init__()``.
         """
 
         pass
@@ -73,6 +61,11 @@ class Logger(ABC):
 
     @abstractmethod
     def concatenate(self) -> np.ndarray:
+        """
+        Takes the M history array attributes, each of length N timesteps, concatenates them into a (N, M) array, and
+        then transposes and returns it.
+        """
+
         pass
 
 

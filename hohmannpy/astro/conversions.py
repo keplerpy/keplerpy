@@ -18,12 +18,6 @@ def classical_2_state(
     Converts the classical orbital elements (where true anomaly is the fast parameter) into inertial position and
     velocity.
 
-    Forms the position and velocity components from the semi-major axis, eccentricity, and true anomaly. These are
-    then assembled into vectors in a basis fixed to the spacecraft. A 3-3-1-3 rotation sequence via the true anomaly,
-    argument of periapsis, inclination, and then RAAN is used to transform these vectors first to the perifocal and
-    then to the planet-centered inertial basis. These transformations are performed using DCMs generated via
-    :func:`dynamics.euler_2_dcm`.
-
     Parameters
     ----------
     sm_axis : float
@@ -54,23 +48,27 @@ def classical_2_state(
         the semi-major axis. Needed for parabolic orbits where the semi-major axis is infinite.
     """
 
-    # Construct the component's of position and velocity in the satellite's local frame.
+    # Construct the component's of position and velocity in the satellite's local frame. The position comes from the
+    # trajectory equation and requires the semi-major axis. The velocity can be assembled from the rate of change of the
+    # position's magnitude and true anomaly. The former again comes from the trajectory equation and the latter from
+    # conversation of angular momentum.
     sl_rectum = sm_axis * (1 - eccentricity ** 2)
-    pos_magnitude = sl_rectum / (1 + eccentricity * np.cos(true_anomaly))  # Trajectory eq.
+    pos_magnitude = sl_rectum / (1 + eccentricity * np.cos(true_anomaly))
     pos_magnitude_dt = np.sqrt(grav_param / sl_rectum) * eccentricity * np.sin(true_anomaly)
     true_anomaly_dt = np.sqrt(grav_param * sl_rectum) / pos_magnitude ** 2
 
-    # Construct the DCM from the local to ecliptic frame.
+    # Use these components to assemble the position and velocity vectors in the local frame.
+    position = np.array([pos_magnitude, 0, 0])
+    velocity = np.array([pos_magnitude_dt, pos_magnitude * true_anomaly_dt, 0])
+
+    # Now, transform them to the perifocal frame. For a 3-1-1 DCM using the RAAN, inclination, and argument of periapsis
+    # and then invert it to get the local -> perifocal transformation.
     local_2_perifocal_dcm = dcms.euler_2_dcm(true_anomaly, 3).T
     perifocal_2_inertial_dcm = (
             dcms.euler_2_dcm(raan, 3).T
             @ dcms.euler_2_dcm(inclination, 1).T
             @ dcms.euler_2_dcm(argp, 3).T
     )
-
-    # Compute position and velocity in the local frame and then transform them to the inertial frame.
-    position = np.array([pos_magnitude, 0, 0])
-    velocity = np.array([pos_magnitude_dt, pos_magnitude * true_anomaly_dt, 0])
 
     position = perifocal_2_inertial_dcm @ local_2_perifocal_dcm @ position
     velocity = perifocal_2_inertial_dcm @ local_2_perifocal_dcm @ velocity
@@ -85,12 +83,6 @@ def state_2_classical(
     r"""
     Converts inertial position and velocity into the classical orbital elements (where true anomaly is the fast
     parameter).
-
-    Compute the specific angular momentum, eccentricity, and nodal vectors from the position and velocity. This yields
-    the eccentricity which can then be used to compute the semi-major axis via the rearranged trajectory equation.
-    Angular geometry using the computed vectors can be used to compute the RAAN, inclination, argument of periapsis,
-    and true anomaly via :func:`arctan2()`. All but the inclination are then wrapped to :math:`[0, 2\pi]` because
-    :func:`arctan2()` yields outputs on :math:`[-\pi/2, \pi/2]`.
 
     Parameters
     ----------
@@ -124,25 +116,23 @@ def state_2_classical(
         instead of the semi-major axis. Useful for parabolic orbits where the semi-major axis is infinite.
     """
 
-    # Define unit vectors.
+    # Define unit vectors in planet-centered inertial (PCI) coordinates.
     unit_vec_1 = np.array([1, 0, 0])
     unit_vec_2 = np.array([0, 1, 0])
     unit_vec_3 = np.array([0, 0, 1])
 
-    # Compute the eccentricity vector and from that the eccentricity.
+    # Compute the specific angular momentum, eccentricity, and nodal vector. These will be used in conjunction with
+    # vector products to get the RAAN, inclination, argument of periapsis, and true anomaly.
     spf_angular_momentum = np.cross(position, velocity)
     eccentricity_vec = (
             np.cross(velocity, spf_angular_momentum)
             / grav_param - position / np.linalg.norm(position)
     )
-    eccentricity = np.linalg.norm(eccentricity_vec)
     nodal_vec = np.cross(unit_vec_3, spf_angular_momentum)
 
-    # Compute the semi-major axis.
-    sl_rectum = np.linalg.norm(spf_angular_momentum) ** 2 / grav_param
-    sm_axis = sl_rectum / (1 - eccentricity ** 2)
-
-    # Compute all the angles needed to parameterize an orbit.
+    # Now do all the vector geometry to get these angles. All of these use np.arctan2() which is defined on
+    # [-pi/2, pi/2] but the angles are parameterized on [0, 2pi] (except inclination which is in fact
+    # defined on [-pi/2, pi/2]). We can add 2pi to these angles to fix their domains.
     raan = np.arctan2(
         np.dot(nodal_vec, unit_vec_2),
         np.dot(nodal_vec, unit_vec_1)
@@ -167,6 +157,11 @@ def state_2_classical(
         argp += 2 * np.pi
     if true_anomaly < 0:  # Wrap to [0, 2pi].
         true_anomaly += 2 * np.pi
+
+    # Compute the semi-major axis and eccentricity.
+    eccentricity = np.linalg.norm(eccentricity_vec)
+    sl_rectum = np.linalg.norm(spf_angular_momentum) ** 2 / grav_param
+    sm_axis = sl_rectum / (1 - eccentricity ** 2)
 
     return sm_axis, eccentricity, raan, inclination, argp, true_anomaly
 
@@ -228,22 +223,19 @@ def classical_2_state_p(
     can not be recovered.
     """
 
-    # Construct the component's of position and velocity in the satellite's local frame.
     pos_magnitude = sl_rectum / (1 + eccentricity * np.cos(true_anomaly))  # Trajectory eq.
     pos_magnitude_dt = np.sqrt(grav_param / sl_rectum) * eccentricity * np.sin(true_anomaly)
     true_anomaly_dt = np.sqrt(grav_param * sl_rectum) / pos_magnitude ** 2
 
-    # Construct the DCM from the local to ecliptic frame.
+    position = np.array([pos_magnitude, 0, 0])
+    velocity = np.array([pos_magnitude_dt, pos_magnitude * true_anomaly_dt, 0])
+
     local_2_perifocal_dcm = dcms.euler_2_dcm(true_anomaly, 3).T
     perifocal_2_inertial_dcm = (
             dcms.euler_2_dcm(raan, 3).T
             @ dcms.euler_2_dcm(inclination, 1).T
             @ dcms.euler_2_dcm(argp, 3).T
     )
-
-    # Compute position and velocity in the local frame and then transform them to the inertial frame.
-    position = np.array([pos_magnitude, 0, 0])
-    velocity = np.array([pos_magnitude_dt, pos_magnitude * true_anomaly_dt, 0])
 
     position = perifocal_2_inertial_dcm @ local_2_perifocal_dcm @ position
     velocity = perifocal_2_inertial_dcm @ local_2_perifocal_dcm @ velocity
@@ -306,24 +298,17 @@ def state_2_classical_p(
     can not be recovered.
     """
 
-    # Define unit vectors.
     unit_vec_1 = np.array([1, 0, 0])
     unit_vec_2 = np.array([0, 1, 0])
     unit_vec_3 = np.array([0, 0, 1])
 
-    # Compute the eccentricity vector and from that the eccentricity.
     spf_angular_momentum = np.cross(position, velocity)
     eccentricity_vec = (
             np.cross(velocity, spf_angular_momentum)
             / grav_param - position / np.linalg.norm(position)
     )
-    eccentricity = np.linalg.norm(eccentricity_vec)
     nodal_vec = np.cross(unit_vec_3, spf_angular_momentum)
 
-    # Compute the semi-major axis.
-    sl_rectum = np.linalg.norm(spf_angular_momentum) ** 2 / grav_param
-
-    # Compute all the angles needed to parameterize an orbit.
     raan = np.arctan2(
         np.dot(nodal_vec, unit_vec_2),
         np.dot(nodal_vec, unit_vec_1)
@@ -341,13 +326,15 @@ def state_2_classical_p(
         np.linalg.norm(spf_angular_momentum) * np.dot(position, eccentricity_vec)
     )
 
-    # Wrap angles (not needed for inclination because it is already defined on [-pi/2, pi/2]).
     if raan < 0:  # Wrap to [0, 2pi].
         raan += 2 * np.pi
     if argp < 0:  # Wrap to [0, 2pi].
         argp += 2 * np.pi
     if true_anomaly < 0:  # Wrap to [0, 2pi].
         true_anomaly += 2 * np.pi
+
+    eccentricity = np.linalg.norm(eccentricity_vec)
+    sl_rectum = np.linalg.norm(spf_angular_momentum) ** 2 / grav_param
 
     return sl_rectum, eccentricity, raan, inclination, argp, true_anomaly
 
@@ -389,13 +376,14 @@ def equinoctial_2_state(
         Velocity of the satellite in planet-centered inertial coordinates.
     """
 
-    # Intermediate variables.
+    # The definition of the equinoctial elements is long and involved so to simplify it we can define a set of
+    # intermediate variables.
     var1 = n_component1 ** 2 - n_component2 ** 2  # alpha
     var2 = 1 + n_component1 ** 2 + n_component2 ** 2  # s
     var3 = 1 + e_component1 * np.cos(true_latitude) + e_component2 * np.sin(true_latitude)  # w
     var4 = sl_rectum / var3  # r
 
-    # Construct position and velocity.
+    # Construct position and velocity from these intermediate variables.
     position = var4 / var2 *  np.array([
         np.cos(true_latitude)
             + var1 * np.cos(true_latitude)
@@ -467,11 +455,15 @@ def classical_2_equinoctial(
     semi-latus rectum will be NAN but all other parameters will be correct.
     """
 
-    sl_rectum = sm_axis * (1 - eccentricity ** 2)
+    # We can construct the e and n components by projecting the eccentricity and nodal vectors respectively into the
+    # equinoctial plane.
     e_component1 = eccentricity * np.cos(argp + raan)
     e_component2 = eccentricity * np.sin(argp + raan)
     n_component1 = np.tan(inclination / 2) * np.cos(raan)
     n_component2 = np.tan(inclination / 2) * np.sin(raan)
+
+    # Semi-latus rectum and true latitude can be easily constructed from the classical orbit elements.
+    sl_rectum = sm_axis * (1 - eccentricity ** 2)
     true_latitude = raan + argp + true_anomaly
 
     return sl_rectum, e_component1, e_component2, n_component1, n_component2, true_latitude
@@ -518,6 +510,7 @@ def equinoctial_2_classical(
         True anomaly.
     """
 
+    # Convert the modified equinoctial orbital elements back to the classical orbital elements.
     sm_axis = sl_rectum / (1 - e_component1 ** 2 - e_component2 ** 2)
     eccentricity = np.sqrt(e_component1 ** 2 + e_component2 ** 2)
     inclination = np.arctan2(

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from .. import satellites
+    from .. import spacecraft
 
 
 class Perturbation(ABC):
@@ -23,7 +23,7 @@ class Perturbation(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self, time: float, state: np.ndarray, satellite: satellites.Satellite) -> np.ndarray:
+    def evaluate(self, time: float, state: np.ndarray, satellite: spacecraft.Satellite) -> np.ndarray:
         r"""
         Takes in the current time and planet-centered inertial state (the position and velocity) and returns the
         perturbing acceleration.
@@ -34,6 +34,7 @@ class Perturbation(ABC):
             Current time in seconds since propagation began.
         state : np.ndarray
             Current translational state in planet-centered inertial coordinates given as (position, velocity).
+        satellite
         """
 
         pass

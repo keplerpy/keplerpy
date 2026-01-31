@@ -9,7 +9,7 @@ from . import propagation, conversions
 class Orbit:
     r"""
     Class which contains all the information needed to define an orbit. This includes a variety of orbit determination
-    schemes (from state, from orbital elements, Gibb's method, etc;) as well as functions to update all the parameters
+    schemes (from state, from orbital elements, Gibb's method, etc;) as well as functions to compute all the parameters
     which define an orbit.
 
     The basic ``__init__()`` creates a :class:`~hohmannpy.astro.Orbit` from a Cartesian state. As an alternative to this,
@@ -17,39 +17,38 @@ class Orbit:
     determination. Internally, these all use the input parameters to generate the Cartesian state which is then used to
     call the base ``__init__()``.
 
-    The Cartesian state, as well as orbital elements (including the classical and equinoctial ones), are all stored as
-    attributes of this class. The Cartesian state acts as the source of truth for the orbit and is always kept up to
-    date. The other attributes are not updated automatically from said state when they are accessed (such as by using
-    the ``@property`` decorator). The rationale for this is that when determining an orbit from say classical elements,
-    if these elements were then passed into a Keplerian solver it would be expected that they would not change. However,
-    if the elements were constantly recomputed from the Cartesian state it would introduce floating-point errors that
-    could accumulate over time. Instead, manual update methods of the form ``update_element()`` must be called to force
-    a recomputation. These should be used with caution, and ideally only :meth:`~hohmannpy.astro.Orbit.update_classical()`
-    and :meth:`~hohmannpy.astro.Orbit.update_equinoctial()` should be called externally.
+    .. caution::
+
+        The Cartesian state, as well as orbital elements (including the classical and equinoctial ones), are all stored
+        as attributes of this class. The Cartesian state acts as the source of truth for the orbit and is always kept up
+        to date. The other attributes are not updated automatically from said state when they are accessed (such as by
+        using the ``@property`` decorator). The rationale for this is that when determining an orbit from say classical
+        elements, if these elements were then passed into a Keplerian solver it would be expected that they would not
+        change. However, if the elements were constantly recomputed from the Cartesian state it would introduce
+        floating-point errors that could accumulate over time. Instead, manual update methods of the form
+        update_element() must be called to force a recomputation. These should be used with caution, and ideally only
+        :meth:`~hohmannpy.astro.Orbit.update_classical()` and :meth:`~hohmannpy.astro.Orbit.update_equinoctial()`
+        should be called externally.
 
     Parameters
     ----------
     position : np.ndarray
-        A (3, ) vector of the satellite's planet-centered inertial position.
+        A (3, ) vector of the satellite's planet-centered inertial position, units of :math:`m`.
     velocity : np.ndarray
-        A (3, ) vector of the satellite's velocity.
+        A (3, ) vector of the satellite's planet-centered velocity, units of :math:`m`.
     grav_param : float
-        Constant related to the gravitational field strength of the central body. Defaults to that of the Earth.
+        Constant related to the gravitational field strength of the central body, units of :math:`m^3/s^2`. Defaults to
+        that of the Earth.
     track_equinoctial : bool
         Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
         classical orbital elements (as well as their degenerate cases) are tracked.
-    _default : bool
-        "Private" internal flag which indicates whether to compute perform an initial call to ``update_classical()``
-        (and possibly ``update_equinoctial``) after instantiation. This is assigned ``True`` for instantiations which
-        involve the Cartesian state and ``False`` otherwise to avoid the floating-point errors discussed in the class
-        description.
 
     Attributes
     ----------
     position : np.ndarray
         A (3, ) vector of the satellite's planet-centered inertial position.
     velocity : np.ndarray
-        A (3, ) vector of the satellite's velocity.
+        A (3, ) vector of the satellite's planet-centered velocity.
     spf_angular_momentum : np.ndarray
         A (3, ) vector of the satellite's specific angular momentum.
     eccentricity_vec : np.ndarray
@@ -217,7 +216,8 @@ class Orbit:
         )
         orbit = cls(position, velocity, grav_param, track_equinoctial, _default=False)
 
-        # Store/compute orbital elements.
+        # Store/compute orbital elements. Manually call update functions because update_all() would overwrite some
+        # elements passed in by the user.
         orbit.update_spf_angular_momentum()
         orbit.update_eccentricity()
         orbit.update_nodal_vec()
@@ -289,7 +289,8 @@ class Orbit:
         )
         orbit = cls(position, velocity, grav_param, track_equinoctial, _default=False)
 
-        # Store/compute orbital elements.
+        # Store/compute orbital elements. Manually call update functions because update_all() would overwrite some
+        # elements passed in by the user.
         orbit.update_spf_angular_momentum()
         orbit.update_eccentricity()
         orbit.update_nodal_vec()
@@ -361,7 +362,8 @@ class Orbit:
         )
         orbit = cls(position, velocity, grav_param, track_equinoctial, _default=False)
 
-        # Store/compute orbital elements.
+        # Store/compute orbital elements. Manually call update functions because update_all() would overwrite some
+        # elements passed in by the user.
         orbit.update_spf_angular_momentum()
         orbit.update_eccentricity()
         orbit.update_nodal_vec()
@@ -398,6 +400,11 @@ class Orbit:
         process of determining the conic whose origin lies at the center of three co-planar vectors is known as Gibbs'
         method.
 
+        .. caution:
+            The three positon vectors must be ordered from earliest the latest in time when they are passed as arguments
+            in order for Gibbs' method to encode retrograde/prograde correctly. They should also have true anomaly
+            spacings of approximately ~5 :math:`deg` in order to ensure the resultant velocities are not ill-conditioned.
+
         Parameters
         ----------
         position1 : np.ndarray
@@ -413,16 +420,11 @@ class Orbit:
         track_equinoctial : bool
             Flag which indicates whether to track the equinoctial elements. By default, only the Cartesian state and the
             classical orbital elements (as well as their degenerate cases) are tracked.
-
-        Notes
-        -----
-        The three positon vectors must be ordered from earliest the latest in time when they are passed as arguments in
-        order for Gibbs' method to encode retrograde/prograde correctly. They should also have true anomaly spacings of
-        approximately ~5 :math:`deg` in order to ensure the resultant velocities are not ill-conditioned.
         """
 
         # Form the three vectors used in Gibbs' method. The first two correspond to sl_rectum = vec1 / vec2, and the
-        # third comes from eccentricity = vec3 / vec2 in the derivation.
+        # third comes from eccentricity = vec3 / vec2 in the derivation. These vectors can be used to compute the
+        # velocity at any of the three positions input by the user.
         gibbs_vec1 = (
                 np.linalg.norm(position3) * np.cross(position1, position2)
                     + np.linalg.norm(position1) * np.cross(position2, position3)
@@ -469,18 +471,11 @@ class Orbit:
             stumpff_series_length: int = 10,
     ) -> Orbit:
         """
-        A universal variable implementation of Gauss' method to solving Lambert's problem. Lambert's problem involves
-        finding the orbit which corresponds to two position vectors and the time-of-flight between them (whether that
-        involves traveling the long or short route between them must be specified by the user).
+        A universal variable implementation of Gauss' method to solving Lambert's problem.
 
-        To do this, the f and g functions and their derivatives are treated as three equations used to solve for
-        three unknowns, in this case the Stumpff parameter, universal variable, and a third term known as the
-        Lambert parameter. These roughly translate to the change in eccentric anomaly, semi-major axis, and semi-latus
-        rectum. Since these equations are transcendental in the Stumpff parameter, a root-finding method is used to
-        solve them in which a value for the Stumpff parameter is guessed, all three equations are solved and then
-        these are plugged into Kepler's equation where time is set equal to the time-of-flight. Once the correct value
-        of the parameter is found, the f and g functions are constructed and used to solve for the velocity at both
-        points.
+        Lambert's problem involves finding the orbit which corresponds to two position vectors and the time-of-flight
+        between them (whether that involves traveling the long or short route between them must be specified by the
+        user).
 
         Parameters
         ----------
@@ -515,8 +510,10 @@ class Orbit:
             classical orbital elements (as well as their degenerate cases) are tracked.
         """
 
-        # Compute the true anomaly between the two position vectors, then use the short_transfer flag to decide if the
-        # short or large arc solution to Lamber's problem should be used.
+        # Compute the true anomaly between the two position vectors. This could be the change in true anomaly between
+        # the two positions (known as the short transfer case), but it is also possible that the satellite went the long
+        # way around (known as the long transfer case). The short_transfer flag is used to decide if the short or large
+        # arc solution to Lamber's problem should be used.
         true_anomaly = (
                 np.arccos(np.dot(position1, position2) / (np.linalg.norm(position1) * np.linalg.norm(position2)))
         )
@@ -540,8 +537,14 @@ class Orbit:
             stumpff_series_length=stumpff_series_length,
         )
 
-        # Solve Lambert's problem using a root-finding method to get the change in the Stumpff parameter between the
-        # two positions.
+        # Lambert's problem involves solving three equations for three unknowns to get the velocity at the initial
+        # position. The three equations used here are the f and g functions and the derivative of the f function
+        # (derivative of the g function is not an independent equation because of a constraint). We solve these three
+        # equations for three unknowns: the Stumpff parameter, universal variable, and a third term known as the
+        # Lambert parameter. These can then be plugged back in to the f and g functions to get the initial and final
+        # velocities. Since the equations are transcendental in the Stumpff parameter, a root-finding method is used to
+        # solve them in which a value for the Stumpff parameter is guessed, all three equations are solved and then
+        # these are plugged into Kepler's equation where time is set equal to the time-of-flight.
         def eq(x):
             s_func, c_func = uv_propagator.stumpff_funcs(x)
             lambert_param = (
@@ -575,7 +578,7 @@ class Orbit:
                         * universal_variable * (1 - stumpff_param * s_func)
             )
 
-        # Compute the velocity corresponding to current position.
+        # Compute the velocity corresponding to current position from the f and g functions.
         match current_position_index:
             case 1:
                 position = position1
